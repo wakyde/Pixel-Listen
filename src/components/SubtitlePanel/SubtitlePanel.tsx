@@ -4,7 +4,13 @@ import { useMediaRef } from '../../context/MediaContext';
 import { parseASS, getSubtitleFormat } from '../../utils/assParser';
 import { parseSRT, parseVTT, getActiveCue } from '../../utils/subtitleParser';
 import { pickSubtitleFile, saveSubtitleFile } from '../../utils/subtitleSave';
-import { translateText, analyzeGrammar, transcribeWithWhisper } from '../../utils/aiService';
+import {
+  translateText,
+  analyzeGrammar,
+  transcribeWithWhisper,
+  transcribeWithLocalWhisper,
+} from '../../utils/aiService';
+import type { AIConfig } from '../../types';
 import { seekTo, safePlay, safePause } from '../../utils/mediaControl';
 import { getEnglishText } from '../../utils/bilingualText';
 import { ConfirmDialog, PixelButton, PixelPanel, PixelBadge, PixelTextarea } from '../PixelUI';
@@ -51,6 +57,14 @@ export function SubtitlePanel() {
     ankiCart,
     openaiApiKey,
     targetLanguage,
+    aiProvider,
+    aiBaseUrl,
+    aiChatModel,
+    aiTranscriptionModel,
+    transcriptionProvider,
+    localWhisperModel,
+    localWhisperProgress,
+    setLocalWhisperProgress,
     isTranscribing,
     isTranslating,
     isAnalyzing,
@@ -61,6 +75,14 @@ export function SubtitlePanel() {
     setCurrentTime,
     setIsPlaying,
   } = useAppStore();
+
+  const aiConfig: AIConfig = {
+    provider: aiProvider,
+    apiKey: openaiApiKey,
+    baseUrl: aiBaseUrl,
+    chatModel: aiChatModel,
+    transcriptionModel: aiTranscriptionModel,
+  };
 
   const activeCue = getActiveCue(subtitles, currentTime);
   const activeCueId = activeCue?.id ?? null;
@@ -174,20 +196,27 @@ export function SubtitlePanel() {
   const runAITranscribe = async () => {
     if (!media) return;
     setIsTranscribing(true);
+    setLocalWhisperProgress(0);
     try {
       const response = await fetch(media.url);
       const blob = await response.blob();
-      const srt = await transcribeWithWhisper(blob, openaiApiKey || undefined);
+      const srt =
+        transcriptionProvider === 'local'
+          ? await transcribeWithLocalWhisper(blob, localWhisperModel, (progress) => {
+              setLocalWhisperProgress(progress);
+            })
+          : await transcribeWithWhisper(blob, aiConfig);
       setSubtitles(parseSRT(srt));
       setSubtitleFile({ name: 'transcription.srt', format: 'srt', fileHandle: null });
     } catch (err) {
       alert(
         err instanceof Error
           ? err.message
-          : 'Transcription failed. Add OpenAI API key in Settings.'
+          : 'Transcription failed. Check settings or try a different provider.'
       );
     } finally {
       setIsTranscribing(false);
+      setLocalWhisperProgress(0);
     }
   };
 
@@ -218,16 +247,12 @@ export function SubtitlePanel() {
     setIsTranslating(true);
     try {
       const english = getEnglishText(cue.text);
-      const translation = await translateText(
-        english,
-        targetLanguage,
-        openaiApiKey || undefined
-      );
+      const translation = await translateText(english, targetLanguage, aiConfig);
       // Avoid dumping English again when no API key
       if (translation && translation !== english) {
         updateCueTranslation(cue.id, translation);
       } else if (!openaiApiKey) {
-        alert('Add an OpenAI API key in Settings to translate, or use bilingual ASS files.');
+        alert('Add an API key in Settings to translate, or use bilingual ASS files.');
       }
     } finally {
       setIsTranslating(false);
@@ -247,11 +272,7 @@ export function SubtitlePanel() {
           continue;
         }
         const english = getEnglishText(cue.text);
-        const translation = await translateText(
-          english,
-          targetLanguage,
-          openaiApiKey || undefined
-        );
+        const translation = await translateText(english, targetLanguage, aiConfig);
         if (translation && translation !== english) {
           updateCueTranslation(cue.id, translation);
         }
@@ -280,10 +301,7 @@ export function SubtitlePanel() {
     setIsPlaying(false);
     setIsAnalyzing(true);
     try {
-      const analysis = await analyzeGrammar(
-        getEnglishText(cue.text),
-        openaiApiKey || undefined
-      );
+      const analysis = await analyzeGrammar(getEnglishText(cue.text), aiConfig);
       setGrammarAnalysis(analysis);
     } finally {
       setIsAnalyzing(false);
@@ -434,6 +452,22 @@ export function SubtitlePanel() {
           </PixelButton>
         )}
       </div>
+
+      {isTranscribing && transcriptionProvider === 'local' && (
+        <div className="local-whisper-progress">
+          <span className="local-whisper-progress-label">
+            {localWhisperProgress < 100
+              ? `Loading Whisper model: ${localWhisperProgress}%`
+              : 'Transcribing with local Whisper...'}
+          </span>
+          <div className="local-whisper-progress-bar">
+            <div
+              className="local-whisper-progress-fill"
+              style={{ width: `${localWhisperProgress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {subtitleFile && (
         <p className="subtitle-file-info">
