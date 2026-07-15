@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
-import { ConfirmDialog, PixelButton, PixelPanel, PixelInput, PixelSelect } from '../PixelUI';
-import type { AIProvider, LocalWhisperModel, TranscriptionProvider } from '../../types';
+import { ConfirmDialog, PixelButton, PixelPanel, PixelInput } from '../PixelUI';
 
 export function SettingsPanel() {
   const {
@@ -9,18 +8,6 @@ export function SettingsPanel() {
     setOpenaiApiKey,
     targetLanguage,
     setTargetLanguage,
-    aiProvider,
-    setAiProvider,
-    aiBaseUrl,
-    setAiBaseUrl,
-    aiChatModel,
-    setAiChatModel,
-    aiTranscriptionModel,
-    setAiTranscriptionModel,
-    transcriptionProvider,
-    setTranscriptionProvider,
-    localWhisperModel,
-    setLocalWhisperModel,
     ankiMediaDirHandle,
     setAnkiMediaDirHandle,
     media,
@@ -35,23 +22,8 @@ export function SettingsPanel() {
   const handleSave = () => {
     localStorage.setItem('pixel-listen-api-key', openaiApiKey);
     localStorage.setItem('pixel-listen-target-lang', targetLanguage);
-    localStorage.setItem('pixel-listen-ai-provider', aiProvider);
-    localStorage.setItem('pixel-listen-ai-base-url', aiBaseUrl);
-    localStorage.setItem('pixel-listen-ai-chat-model', aiChatModel);
-    localStorage.setItem('pixel-listen-ai-transcription-model', aiTranscriptionModel);
-    localStorage.setItem('pixel-listen-transcription-provider', transcriptionProvider);
-    localStorage.setItem('pixel-listen-local-whisper-model', localWhisperModel);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  };
-
-  const handleProviderChange = (value: AIProvider) => {
-    setAiProvider(value);
-    if (value === 'openai') {
-      if (!aiBaseUrl) setAiBaseUrl('https://api.openai.com/v1');
-      if (!aiChatModel) setAiChatModel('gpt-4o-mini');
-      if (!aiTranscriptionModel) setAiTranscriptionModel('whisper-1');
-    }
   };
 
   const clearMedia = () => {
@@ -92,29 +64,7 @@ export function SettingsPanel() {
 
       <div className="settings-form">
         <label className="settings-label">
-          AI Provider
-          <span className="settings-hint">Choose OpenAI or a custom OpenAI-compatible API</span>
-        </label>
-        <PixelSelect
-          value={aiProvider}
-          onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
-        >
-          <option value="openai">OpenAI</option>
-          <option value="custom">Custom / Third-party</option>
-        </PixelSelect>
-
-        <label className="settings-label">
-          API Base URL
-          <span className="settings-hint">For custom providers like DeepSeek, Gemini proxy, Ollama, vLLM...</span>
-        </label>
-        <PixelInput
-          value={aiBaseUrl}
-          onChange={(e) => setAiBaseUrl(e.target.value)}
-          placeholder="https://api.openai.com/v1"
-        />
-
-        <label className="settings-label">
-          API Key
+          OpenAI API Key
           <span className="settings-hint">For AI transcription, translation, grammar &amp; Anki</span>
         </label>
         <div className="api-key-row">
@@ -128,49 +78,6 @@ export function SettingsPanel() {
             {showKey ? 'HIDE' : 'SHOW'}
           </PixelButton>
         </div>
-
-        <label className="settings-label">Translation / Grammar Model</label>
-        <PixelInput
-          value={aiChatModel}
-          onChange={(e) => setAiChatModel(e.target.value)}
-          placeholder="gpt-4o-mini"
-        />
-
-        <label className="settings-label">Transcription Model</label>
-        <PixelInput
-          value={aiTranscriptionModel}
-          onChange={(e) => setAiTranscriptionModel(e.target.value)}
-          placeholder="whisper-1"
-        />
-
-        <label className="settings-label">
-          Transcription Provider
-          <span className="settings-hint">API uses the provider above; Local Whisper runs in your browser</span>
-        </label>
-        <PixelSelect
-          value={transcriptionProvider}
-          onChange={(e) => setTranscriptionProvider(e.target.value as TranscriptionProvider)}
-        >
-          <option value="api">API (OpenAI / Third-party)</option>
-          <option value="local">Local Whisper (free, browser-based)</option>
-        </PixelSelect>
-
-        {transcriptionProvider === 'local' && (
-          <>
-            <label className="settings-label">
-              Local Whisper Model
-              <span className="settings-hint">Larger = more accurate but slower download / inference</span>
-            </label>
-            <PixelSelect
-              value={localWhisperModel}
-              onChange={(e) => setLocalWhisperModel(e.target.value as LocalWhisperModel)}
-            >
-              <option value="tiny">tiny (~39 MB, fast)</option>
-              <option value="base">base (~74 MB, balanced)</option>
-              <option value="small">small (~244 MB, accurate)</option>
-            </PixelSelect>
-          </>
-        )}
 
         <label className="settings-label">Translation Target Language</label>
         <PixelInput

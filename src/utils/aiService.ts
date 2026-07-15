@@ -1,21 +1,4 @@
-import type { AIConfig, GrammarAnalysis } from '../types';
-
-export type AIServiceConfig = AIConfig;
-
-const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
-
-function resolveBaseUrl(config: AIServiceConfig): string {
-  const url = config.baseUrl.trim();
-  if (!url) return DEFAULT_BASE_URL;
-  return url.replace(/\/$/, '');
-}
-
-function authHeaders(config: AIServiceConfig): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${config.apiKey}`,
-  };
-}
+import type { GrammarAnalysis } from '../types';
 
 const GRAMMAR_PROMPT = (sentence: string) =>
   `Analyze this English sentence for a language learner. Return ONLY valid JSON with keys: structure (string), keyPoints (string array), vocabulary (array of {word, meaning}), suggestions (string array). Sentence: "${sentence}"`;
@@ -23,19 +6,21 @@ const GRAMMAR_PROMPT = (sentence: string) =>
 export async function translateText(
   text: string,
   targetLang: string,
-  config?: AIServiceConfig
+  apiKey?: string
 ): Promise<string> {
-  if (!config?.apiKey) {
+  if (!apiKey) {
     // Without API key: only return when caller already provided nativeTranslation
     return text;
   }
   try {
-    const baseUrl = resolveBaseUrl(config);
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: authHeaders(config),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        model: config.chatModel || 'gpt-4o-mini',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -56,7 +41,7 @@ export async function translateText(
 
 export async function analyzeGrammar(
   sentence: string,
-  config?: AIServiceConfig
+  apiKey?: string
 ): Promise<GrammarAnalysis> {
   const fallback: GrammarAnalysis = {
     sentence,
@@ -70,15 +55,17 @@ export async function analyzeGrammar(
     suggestions: ['Practice reading aloud', 'Shadow the original audio'],
   };
 
-  if (!config?.apiKey) return fallback;
+  if (!apiKey) return fallback;
 
   try {
-    const baseUrl = resolveBaseUrl(config);
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: authHeaders(config),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        model: config.chatModel || 'gpt-4o-mini',
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: 'You are an English grammar tutor. Respond only with valid JSON.' },
           { role: 'user', content: GRAMMAR_PROMPT(sentence) },
@@ -100,9 +87,9 @@ export async function analyzeGrammar(
 
 export async function generateAnkiRecommendations(
   cues: { text: string; start: number; end: number }[],
-  config?: AIServiceConfig
+  apiKey?: string
 ): Promise<{ front: string; back: string; start: number; end: number }[]> {
-  if (!config?.apiKey || cues.length === 0) {
+  if (!apiKey || cues.length === 0) {
     return cues.slice(0, 10).map((c) => ({
       front: `Listen and repeat:\n${c.text.slice(0, 80)}`,
       back: c.text,
@@ -113,12 +100,14 @@ export async function generateAnkiRecommendations(
 
   const sample = cues.slice(0, 20).map((c) => c.text).join('\n');
   try {
-    const baseUrl = resolveBaseUrl(config);
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: authHeaders(config),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
-        model: config.chatModel || 'gpt-4o-mini',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -157,20 +146,19 @@ export async function generateAnkiRecommendations(
 
 export async function transcribeWithWhisper(
   audioBlob: Blob,
-  config?: AIServiceConfig
+  apiKey?: string
 ): Promise<string> {
-  if (!config?.apiKey) {
-    throw new Error('API key required for AI transcription');
+  if (!apiKey) {
+    throw new Error('OpenAI API key required for AI transcription');
   }
-  const baseUrl = resolveBaseUrl(config);
   const formData = new FormData();
   formData.append('file', audioBlob, 'audio.webm');
-  formData.append('model', config.transcriptionModel || 'whisper-1');
+  formData.append('model', 'whisper-1');
   formData.append('response_format', 'verbose_json');
 
-  const res = await fetch(`${baseUrl}/audio/transcriptions`, {
+  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${config.apiKey}` },
+    headers: { Authorization: `Bearer ${apiKey}` },
     body: formData,
   });
   if (!res.ok) throw new Error('Transcription failed');
@@ -195,5 +183,3 @@ function formatSrt(sec: number): string {
   const ss = Math.floor(s);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
-
-export { transcribeWithLocalWhisper, clearWhisperCache } from './localWhisper';

@@ -1,16 +1,13 @@
 import { create } from 'zustand';
 import type {
   ABLoopSegment,
-  AIProvider,
   AnkiCartItem,
   FavoriteItem,
   GrammarAnalysis,
-  LocalWhisperModel,
   MediaFile,
   PracticeMode,
   SubtitleCue,
   SubtitleFile,
-  TranscriptionProvider,
   VideoSubtitleMode,
 } from '../types';
 import { mergeCueGroups } from '../utils/bilingualText';
@@ -44,13 +41,6 @@ interface AppState {
 
   openaiApiKey: string;
   targetLanguage: string;
-  aiProvider: AIProvider;
-  aiBaseUrl: string;
-  aiChatModel: string;
-  aiTranscriptionModel: string;
-  transcriptionProvider: TranscriptionProvider;
-  localWhisperModel: LocalWhisperModel;
-  localWhisperProgress: number;
   /** File System Access API directory handle for Anki's media collection folder */
   ankiMediaDirHandle: FileSystemDirectoryHandle | null;
 
@@ -96,13 +86,6 @@ interface AppState {
   setPracticeMode: (mode: PracticeMode) => void;
   setOpenaiApiKey: (key: string) => void;
   setTargetLanguage: (lang: string) => void;
-  setAiProvider: (provider: AIProvider) => void;
-  setAiBaseUrl: (url: string) => void;
-  setAiChatModel: (model: string) => void;
-  setAiTranscriptionModel: (model: string) => void;
-  setTranscriptionProvider: (provider: TranscriptionProvider) => void;
-  setLocalWhisperModel: (model: LocalWhisperModel) => void;
-  setLocalWhisperProgress: (progress: number) => void;
   setAnkiMediaDirHandle: (handle: FileSystemDirectoryHandle | null) => void;
 
   setIsTranscribing: (v: boolean) => void;
@@ -137,13 +120,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openaiApiKey: '',
   targetLanguage: 'Chinese',
-  aiProvider: 'openai',
-  aiBaseUrl: 'https://api.openai.com/v1',
-  aiChatModel: 'gpt-4o-mini',
-  aiTranscriptionModel: 'whisper-1',
-  transcriptionProvider: 'api',
-  localWhisperModel: 'tiny',
-  localWhisperProgress: 0,
   ankiMediaDirHandle: null,
 
   isTranscribing: false,
@@ -315,13 +291,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPracticeMode: (mode) => set({ practiceMode: mode }),
   setOpenaiApiKey: (key) => set({ openaiApiKey: key }),
   setTargetLanguage: (lang) => set({ targetLanguage: lang }),
-  setAiProvider: (provider) => set({ aiProvider: provider }),
-  setAiBaseUrl: (url) => set({ aiBaseUrl: url }),
-  setAiChatModel: (model) => set({ aiChatModel: model }),
-  setAiTranscriptionModel: (model) => set({ aiTranscriptionModel: model }),
-  setTranscriptionProvider: (provider) => set({ transcriptionProvider: provider }),
-  setLocalWhisperModel: (model) => set({ localWhisperModel: model }),
-  setLocalWhisperProgress: (progress) => set({ localWhisperProgress: progress }),
   setAnkiMediaDirHandle: (handle) => set({ ankiMediaDirHandle: handle }),
 
   setIsTranscribing: (v) => set({ isTranscribing: v }),

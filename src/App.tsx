@@ -10,7 +10,7 @@ import { RecordingMode } from './components/PracticeModes/RecordingMode';
 import { AnkiExportPanel } from './components/AnkiExport/AnkiExportPanel';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
 import { loadFromStore, saveToStore } from './utils/storage';
-import type { ABLoopSegment, AIProvider, FavoriteItem, LocalWhisperModel, TranscriptionProvider } from './types';
+import type { ABLoopSegment, FavoriteItem } from './types';
 import './styles/globals.css';
 
 type Tab = 'subtitles' | 'favorites' | 'anki' | 'settings';
@@ -105,12 +105,6 @@ function AppContent() {
     setABHistory,
     setOpenaiApiKey,
     setTargetLanguage,
-    setAiProvider,
-    setAiBaseUrl,
-    setAiChatModel,
-    setAiTranscriptionModel,
-    setTranscriptionProvider,
-    setLocalWhisperModel,
     abHistory,
     favorites,
     ankiCart,
@@ -123,36 +117,9 @@ function AppContent() {
     loadFromStore<ABLoopSegment>('abHistory').then(setABHistory);
     const key = localStorage.getItem('pixel-listen-api-key');
     const lang = localStorage.getItem('pixel-listen-target-lang');
-    const provider = localStorage.getItem('pixel-listen-ai-provider') as AIProvider | null;
-    const baseUrl = localStorage.getItem('pixel-listen-ai-base-url');
-    const chatModel = localStorage.getItem('pixel-listen-ai-chat-model');
-    const transcriptionModel = localStorage.getItem('pixel-listen-ai-transcription-model');
-    const transcriptionProvider = localStorage.getItem(
-      'pixel-listen-transcription-provider'
-    ) as TranscriptionProvider | null;
-    const localWhisperModel = localStorage.getItem(
-      'pixel-listen-local-whisper-model'
-    ) as LocalWhisperModel | null;
     if (key) setOpenaiApiKey(key);
     if (lang) setTargetLanguage(lang);
-    if (provider) setAiProvider(provider);
-    if (baseUrl) setAiBaseUrl(baseUrl);
-    if (chatModel) setAiChatModel(chatModel);
-    if (transcriptionModel) setAiTranscriptionModel(transcriptionModel);
-    if (transcriptionProvider) setTranscriptionProvider(transcriptionProvider);
-    if (localWhisperModel) setLocalWhisperModel(localWhisperModel);
-  }, [
-    setFavorites,
-    setABHistory,
-    setOpenaiApiKey,
-    setTargetLanguage,
-    setAiProvider,
-    setAiBaseUrl,
-    setAiChatModel,
-    setAiTranscriptionModel,
-    setTranscriptionProvider,
-    setLocalWhisperModel,
-  ]);
+  }, [setFavorites, setABHistory, setOpenaiApiKey, setTargetLanguage]);
 
   useEffect(() => {
     favorites.forEach((f) => saveToStore('favorites', f));

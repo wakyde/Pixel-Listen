@@ -115,28 +115,10 @@ export interface RecordingItem {
   createdAt: number;
 }
 
-export type AIProvider = 'openai' | 'custom';
-export type TranscriptionProvider = 'api' | 'local';
-export type LocalWhisperModel = 'tiny' | 'base' | 'small';
-
-export interface AIConfig {
-  provider: AIProvider;
-  apiKey: string;
-  baseUrl: string;
-  chatModel: string;
-  transcriptionModel: string;
-}
-
 export interface AppSettings {
   playbackRate: number;
   panelSubtitlesVisible: boolean;
   videoSubtitleMode: VideoSubtitleMode;
   targetLanguage: string;
   openaiApiKey: string;
-  aiProvider: AIProvider;
-  aiBaseUrl: string;
-  aiChatModel: string;
-  aiTranscriptionModel: string;
-  transcriptionProvider: TranscriptionProvider;
-  localWhisperModel: LocalWhisperModel;
 }
