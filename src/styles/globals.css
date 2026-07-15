@@ -1387,14 +1387,116 @@ body {
   border: 2px solid #0d0e1a;
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .app-main {
-    flex-direction: column;
+/* Anki dir row */
+.anki-dir-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.anki-dir-path {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--accent-gold);
+  word-break: break-all;
+}
+
+.settings-error {
+  font-size: 14px;
+  color: var(--accent-red);
+  line-height: 1.4;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-green);
+  border: 2px solid #0d0e1a;
+}
+
+/* ===================== Mobile / Small-screen ===================== */
+@media (max-width: 700px) {
+  /* Shrink pixel font sizes so header fits */
+  .logo h1 { font-size: 8px; }
+  .tagline { display: none; }
+
+  .mode-btn { font-size: 6px; padding: 8px 8px; }
+
+  .app-header {
+    gap: 10px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
   }
 
+  /* Stack main stage and side panel vertically */
+  .app-main {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Side panel moves to the bottom; tabs become a row like a bottom nav */
   .side-panel {
     width: 100%;
-    max-height: 40vh;
+    border-left: none;
+    border-top: var(--pixel-border) solid #0d0e1a;
+    /* Let panel grow to show content, no artificial max */
+    max-height: none;
   }
+
+  /* Taller bottom tab strip is easier to tap */
+  .side-tab {
+    font-size: 5px;
+    padding: 14px 4px;
+  }
+
+  .side-content {
+    padding: 8px;
+    /* Give the panel content a sensible max so it doesn't push other content off screen */
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  /* Progress bar: taller thumb for touch */
+  .pixel-range { height: 18px; }
+  .pixel-range::-webkit-slider-thumb { width: 22px; height: 28px; }
+
+  .progress-bar-wrap { min-height: 36px; margin-bottom: 20px; }
+
+  /* Stack controls vertically on very narrow screens */
+  .controls-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .controls-center { justify-content: center; }
+  .time-display { text-align: center; }
+
+  .playback-options { justify-content: center; }
+
+  /* Speed buttons: a bit bigger tap target */
+  .speed-btn { padding: 7px 10px; }
+
+  /* AB controls wrap */
+  .ab-controls { gap: 4px; }
+
+  /* Subtitle list */
+  .subtitle-list { min-height: 200px; }
+
+  /* Media player video */
+  .media-element { max-height: 38vh; }
+
+  /* Pixel buttons: slightly bigger tap target on mobile */
+  .pixel-btn-sm { padding: 8px 12px; }
+}
+
+/* Slightly relaxed layout for mid-range tablets (700–960px) */
+@media (min-width: 701px) and (max-width: 960px) {
+  .side-panel { width: 300px; }
+  .logo h1 { font-size: 10px; }
+  .tagline { font-size: 14px; }
 }

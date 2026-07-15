@@ -1,6 +1,17 @@
 import JSZip from 'jszip';
 import type { AnkiCard } from '../types';
 
+/** yyyymmdd_HHmmss_<6-char uid> — safe for all file systems */
+function generateMediaFilename(ext: string): string {
+  const now = new Date();
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+  const datePart =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const uid = crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+  return `pl_${datePart}_${uid}.${ext}`;
+}
+
 async function extractAudioClip(
   mediaUrl: string,
   start: number,
@@ -138,10 +149,11 @@ export async function exportAnkiDeck(
   deckName: string,
   cards: AnkiCard[],
   mediaUrl: string | null,
-  isVideo: boolean
+  isVideo: boolean,
+  ankiMediaDirHandle?: FileSystemDirectoryHandle | null
 ): Promise<void> {
   const zip = new JSZip();
-  const mediaFiles: string[] = [];
+  const mediaFiles: { name: string; blob: Blob }[] = [];
 
   const noteLines: string[] = [];
   for (let i = 0; i < cards.length; i++) {
@@ -150,16 +162,16 @@ export async function exportAnkiDeck(
     if (mediaUrl && card.audioStart != null && card.audioEnd != null) {
       const clip = await extractAudioClip(mediaUrl, card.audioStart, card.audioEnd, isVideo);
       if (clip) {
-        const filename = `clip_${i}.wav`;
-        mediaFiles.push(filename);
+        const filename = generateMediaFilename('wav');
+        mediaFiles.push({ name: filename, blob: clip });
         zip.file(filename, clip);
         mediaTags += `[sound:${filename}] `;
       }
       if (isVideo) {
         const vclip = await extractVideoClip(mediaUrl, card.audioStart, card.audioEnd);
         if (vclip) {
-          const vname = `clip_${i}.webm`;
-          mediaFiles.push(vname);
+          const vname = generateMediaFilename('webm');
+          mediaFiles.push({ name: vname, blob: vclip });
           zip.file(vname, vclip);
           mediaTags += `[sound:${vname}] `;
         }
@@ -177,22 +189,47 @@ export async function exportAnkiDeck(
   const tsv =
     header +
     noteLines.map((l) => `${l}\t${deckName}\tBasic`).join('\n');
-  zip.file(`${deckName}.txt`, tsv);
+  const tsvFilename = `${deckName}.txt`;
 
-  // media map for manual pairing; also include collection.media style list
+  // If the user has picked an Anki media directory, write files directly into it
+  if (ankiMediaDirHandle && mediaFiles.length > 0) {
+    for (const { name, blob } of mediaFiles) {
+      try {
+        const fileHandle = await ankiMediaDirHandle.getFileHandle(name, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } catch {
+        // Silently ignore individual write failures; continue with the rest
+      }
+    }
+    // Only download the TSV cards file — media is already in Anki's folder
+    const tsvBlob = new Blob([tsv], { type: 'text/plain' });
+    downloadBlob(tsvBlob, tsvFilename);
+    return;
+  }
+
+  // Fallback: bundle everything into a ZIP
+  zip.file(tsvFilename, tsv);
+
   if (mediaFiles.length > 0) {
+    for (const { name, blob } of mediaFiles) {
+      zip.file(name, blob);
+    }
     zip.file(
       'media.json',
-      JSON.stringify(Object.fromEntries(mediaFiles.map((f, i) => [String(i), f])))
+      JSON.stringify(
+        Object.fromEntries(mediaFiles.map(({ name }, i) => [String(i), name]))
+      )
     );
     zip.file('README_IMPORT.txt', [
       'How to import into Anki:',
       '1. Unzip this archive into a folder.',
       '2. In Anki: File → Import → select the .txt file.',
       '3. Map fields: Front, Back, Tags. Note type: Basic.',
-      '4. Copy the .wav/.webm media files into your Anki media collection folder',
-      '   (Anki → Tools → Check Media → Open media folder), OR use AnkiConnect / Add Media.',
-      '5. Front = translation; Back = English original + [sound:…] media.',
+      '4. Copy the .wav/.webm files into your Anki media collection folder',
+      '   (Anki → Tools → Check Media → Open media folder).',
+      '5. Tip: set your Anki media path in Pixel Listen Settings to skip this step.',
       '',
     ].join('\n'));
   }

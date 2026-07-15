@@ -8,6 +8,7 @@ export function AnkiExportPanel() {
   const {
     media,
     ankiCart,
+    ankiMediaDirHandle,
     removeFromAnkiCart,
     mergeAnkiCartItems,
     clearAnkiCart,
@@ -47,7 +48,8 @@ export function AnkiExportPanel() {
         'PixelListen_Cart',
         cards,
         media?.url ?? null,
-        media?.type === 'video'
+        media?.type === 'video',
+        ankiMediaDirHandle
       );
     } finally {
       setIsExporting(false);

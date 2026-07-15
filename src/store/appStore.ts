@@ -41,6 +41,8 @@ interface AppState {
 
   openaiApiKey: string;
   targetLanguage: string;
+  /** File System Access API directory handle for Anki's media collection folder */
+  ankiMediaDirHandle: FileSystemDirectoryHandle | null;
 
   isTranscribing: boolean;
   isTranslating: boolean;
@@ -84,6 +86,7 @@ interface AppState {
   setPracticeMode: (mode: PracticeMode) => void;
   setOpenaiApiKey: (key: string) => void;
   setTargetLanguage: (lang: string) => void;
+  setAnkiMediaDirHandle: (handle: FileSystemDirectoryHandle | null) => void;
 
   setIsTranscribing: (v: boolean) => void;
   setIsTranslating: (v: boolean) => void;
@@ -117,6 +120,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   openaiApiKey: '',
   targetLanguage: 'Chinese',
+  ankiMediaDirHandle: null,
 
   isTranscribing: false,
   isTranslating: false,
@@ -287,6 +291,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setPracticeMode: (mode) => set({ practiceMode: mode }),
   setOpenaiApiKey: (key) => set({ openaiApiKey: key }),
   setTargetLanguage: (lang) => set({ targetLanguage: lang }),
+  setAnkiMediaDirHandle: (handle) => set({ ankiMediaDirHandle: handle }),
 
   setIsTranscribing: (v) => set({ isTranscribing: v }),
   setIsTranslating: (v) => set({ isTranslating: v }),
