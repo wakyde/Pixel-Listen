@@ -68,13 +68,11 @@ export function SubtitlePanel() {
   useEffect(() => {
     if (!activeCueId || editingCueId) return;
     const el = activeItemRef.current;
-    if (!el || !listRef.current) return;
     const list = listRef.current;
-    const elTop = el.offsetTop;
-    const elBottom = elTop + el.offsetHeight;
-    const viewTop = list.scrollTop;
-    const viewBottom = viewTop + list.clientHeight;
-    if (elTop < viewTop + 8 || elBottom > viewBottom - 8) {
+    if (!el || !list) return;
+    const elRect = el.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    if (elRect.top < listRect.top + 8 || elRect.bottom > listRect.bottom - 8) {
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   }, [activeCueId, editingCueId]);
@@ -263,12 +261,23 @@ export function SubtitlePanel() {
 
   const handleTranslateAll = () => {
     if (subtitles.length === 0) return;
-    const available = subtitles.filter((cue) => cue.translation || cue.nativeTranslation);
-    if (available.length === subtitles.length) {
-      const hasVisibleTranslations = available.some((cue) => !cue.translationHidden);
-      setAllTranslationsHidden(hasVisibleTranslations);
+    // If any cue already has a visible translation, hide them all (toggle off)
+    const hasVisible = subtitles.some(
+      (cue) => (cue.translation || cue.nativeTranslation) && !cue.translationHidden
+    );
+    if (hasVisible) {
+      setAllTranslationsHidden(true);
       return;
     }
+    // If all cues have a translation (just hidden), reveal them all
+    const allHaveTranslation = subtitles.every(
+      (cue) => cue.translation || cue.nativeTranslation
+    );
+    if (allHaveTranslation) {
+      setAllTranslationsHidden(false);
+      return;
+    }
+    // Otherwise fetch translations
     setConfirmAction('translateAll');
   };
 

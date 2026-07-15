@@ -95,8 +95,10 @@ export async function pickSubtitleFile(): Promise<{
       const file = await handle.getFile();
       return { file, handle };
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return null;
-      throw err;
+      // AbortError = user cancelled; any other error (picker already active, security policy etc.)
+      // → return null so the caller falls back to the native <input> picker.
+      void err;
+      return null;
     }
   }
   return null;

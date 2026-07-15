@@ -12,6 +12,30 @@ function generateMediaFilename(ext: string): string {
   return `pl_${datePart}_${uid}.${ext}`;
 }
 
+/** Cache decoded AudioBuffer per URL to avoid re-fetching for every card in a batch export. */
+const audioBufferCache = new Map<string, AudioBuffer>();
+
+async function getDecodedAudioBuffer(mediaUrl: string): Promise<AudioBuffer | null> {
+  const cached = audioBufferCache.get(mediaUrl);
+  if (cached) return cached;
+  try {
+    const response = await fetch(mediaUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const audioCtx = new AudioContext();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    await audioCtx.close();
+    audioBufferCache.set(mediaUrl, audioBuffer);
+    return audioBuffer;
+  } catch {
+    return null;
+  }
+}
+
+/** Call after export to free cached buffers. */
+export function clearAudioBufferCache(): void {
+  audioBufferCache.clear();
+}
+
 async function extractAudioClip(
   mediaUrl: string,
   start: number,
@@ -19,12 +43,8 @@ async function extractAudioClip(
   _isVideo: boolean
 ): Promise<Blob | null> {
   try {
-    const response = await fetch(mediaUrl);
-    const arrayBuffer = await response.arrayBuffer();
-
-    const audioCtx = new AudioContext();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
-    await audioCtx.close();
+    const audioBuffer = await getDecodedAudioBuffer(mediaUrl);
+    if (!audioBuffer) return null;
 
     const sampleRate = audioBuffer.sampleRate;
     const startSample = Math.floor(start * sampleRate);
@@ -164,7 +184,6 @@ export async function exportAnkiDeck(
       if (clip) {
         const filename = generateMediaFilename('wav');
         mediaFiles.push({ name: filename, blob: clip });
-        zip.file(filename, clip);
         mediaTags += `[sound:${filename}] `;
       }
       if (isVideo) {
@@ -172,7 +191,6 @@ export async function exportAnkiDeck(
         if (vclip) {
           const vname = generateMediaFilename('webm');
           mediaFiles.push({ name: vname, blob: vclip });
-          zip.file(vname, vclip);
           mediaTags += `[sound:${vname}] `;
         }
       }
@@ -203,6 +221,7 @@ export async function exportAnkiDeck(
         // Silently ignore individual write failures; continue with the rest
       }
     }
+    clearAudioBufferCache();
     // Only download the TSV cards file — media is already in Anki's folder
     const tsvBlob = new Blob([tsv], { type: 'text/plain' });
     downloadBlob(tsvBlob, tsvFilename);
@@ -234,6 +253,7 @@ export async function exportAnkiDeck(
     ].join('\n'));
   }
 
+  clearAudioBufferCache();
   const blob = await zip.generateAsync({ type: 'blob' });
   downloadBlob(blob, `${deckName}_anki_export.zip`);
 }
