@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
 import { getActiveCue } from '../../utils/subtitleParser';
 import { safePlay, safePause } from '../../utils/mediaControl';
+import { seekTo } from '../../utils/mediaControl';
 import { PixelButton } from '../PixelUI';
 
 const ACCEPTED_MEDIA = '.mp4,.mkv,.mp3,.webm,.m4a,.wav,.ogg';
@@ -27,11 +28,51 @@ export function MediaPlayer() {
     practiceMode,
     setSubtitles,
     setSubtitleFile,
+    setSelectedCueId,
   } = useAppStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const activeCue = getActiveCue(subtitles, currentTime);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
+      if (!subtitles || subtitles.length === 0) return;
+
+      // determine current active index
+      let idx = activeCue ? subtitles.findIndex((c) => c.id === activeCue.id) : -1;
+      if (idx === -1) {
+        // fallback: find the first cue that starts after currentTime
+        idx = subtitles.findIndex((c) => c.start > currentTime) - 1;
+      }
+
+      const goToIndex = async (newIdx: number) => {
+        if (newIdx < 0 || newIdx >= subtitles.length) return;
+        const cue = subtitles[newIdx];
+        setSelectedCueId(cue.id);
+        const t = seekTo(mediaRef.current, cue.start);
+        setCurrentTime(t);
+        const ok = await safePlay(mediaRef.current);
+        setIsPlaying(ok);
+      };
+
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const newIdx = idx <= 0 ? 0 : idx - 1;
+        void goToIndex(newIdx);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const newIdx = idx < 0 ? 0 : Math.min(subtitles.length - 1, idx + 1);
+        void goToIndex(newIdx);
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [subtitles, currentTime, activeCue, setCurrentTime, setIsPlaying, setSelectedCueId]);
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
