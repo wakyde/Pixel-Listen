@@ -75,12 +75,13 @@ export function shouldMergeCues(
   return false;
 }
 
-export function mergeCueGroups<T extends { id: string; text: string; start: number; end: number; translation?: string }>(
+export function mergeCueGroups<T extends { id: string; text: string; start: number; end: number; translation?: string; nativeTranslation?: string }>(
   cues: T[],
   selectedIds: Set<string>
 ): {
   text: string;
   translation?: string;
+  nativeTranslation?: string;
   start: number;
   end: number;
   ids: string[];
@@ -91,6 +92,7 @@ export function mergeCueGroups<T extends { id: string; text: string; start: numb
   const groups: {
     text: string;
     translation?: string;
+    nativeTranslation?: string;
     start: number;
     end: number;
     ids: string[];
@@ -99,6 +101,7 @@ export function mergeCueGroups<T extends { id: string; text: string; start: numb
   let current = {
     text: getEnglishText(selected[0].text),
     translation: selected[0].translation,
+    nativeTranslation: selected[0].nativeTranslation,
     start: selected[0].start,
     end: selected[0].end,
     ids: [selected[0].id],
@@ -120,11 +123,17 @@ export function mergeCueGroups<T extends { id: string; text: string; start: numb
           ? `${current.translation} ${cue.translation}`
           : cue.translation;
       }
+      if (cue.nativeTranslation) {
+        current.nativeTranslation = current.nativeTranslation
+          ? `${current.nativeTranslation} ${cue.nativeTranslation}`
+          : cue.nativeTranslation;
+      }
     } else {
       groups.push(current);
       current = {
         text: getEnglishText(cue.text),
         translation: cue.translation,
+        nativeTranslation: cue.nativeTranslation,
         start: cue.start,
         end: cue.end,
         ids: [cue.id],
