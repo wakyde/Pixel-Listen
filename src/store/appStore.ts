@@ -257,10 +257,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       addedAt: Date.now(),
     }));
 
-    set({ ankiCart: [...items, ...ankiCart] });
+    set((s) => ({
+      subtitles: s.subtitles.map((cue) =>
+        idSet.has(cue.id) && (cue.translation || cue.nativeTranslation)
+          ? { ...cue, translationHidden: false }
+          : cue
+      ),
+      ankiCart: [...items, ...ankiCart],
+    }));
   },
   removeFromAnkiCart: (id) =>
     set((s) => ({ ankiCart: s.ankiCart.filter((i) => i.id !== id) })),
+
   mergeAnkiCartItems: (ids) => {
     const idSet = new Set(ids);
     const { ankiCart } = get();
