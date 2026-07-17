@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { useI18n } from '../../context/I18nContext';
 import { useMediaRef } from '../../context/MediaContext';
 import { getActiveCue } from '../../utils/subtitleParser';
 import { getEnglishText } from '../../utils/bilingualText';
@@ -29,6 +30,7 @@ function calcAccuracy(expected: string, typed: string): number {
 }
 
 export function TypingMode() {
+  const { t } = useI18n();
   const mediaRef = useMediaRef();
   const { subtitles, currentTime, setCurrentTime, setIsPlaying } = useAppStore();
   const [cueIndex, setCueIndex] = useState(0);
@@ -114,26 +116,26 @@ export function TypingMode() {
 
   if (subtitles.length === 0) {
     return (
-      <PixelPanel title="TYPING MODE">
-        <p className="empty-hint">Load subtitles first to practice typing</p>
+      <PixelPanel title={t('panel.typing_mode')}>
+        <p className="empty-hint">{t('typing.empty_hint')}</p>
       </PixelPanel>
     );
   }
 
   return (
-    <PixelPanel title="TYPING MODE">
+    <PixelPanel title={t('panel.typing_mode')}>
       <div className={`typing-mode${showBurst ? ' success-burst' : ''}`}>
-        {showBurst && <div className="success-fx" aria-hidden>✨ PERFECT! ✨</div>}
+        {showBurst && <div className="success-fx" aria-hidden>✨ {t('typing.perfect')} ✨</div>}
         <div className="typing-header">
           <span className="cue-counter">
             {cueIndex + 1} / {subtitles.length}
           </span>
           <PixelButton variant="secondary" size="sm" onClick={playCue}>
-            🔊 REPLAY
+             {t('typing.replay')}
           </PixelButton>
         </div>
 
-        <p className="typing-hint">Listen and type the English line (case ignored):</p>
+        <p className="typing-hint">{t('typing.hint')}</p>
 
         {result?.shown && cue && (
           <div className="typing-reveal">
@@ -150,7 +152,7 @@ export function TypingMode() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') checkAnswer();
           }}
-          placeholder="Type English here..."
+          placeholder={t('typing.placeholder')}
           autoComplete="off"
           spellCheck={false}
         />
@@ -162,10 +164,10 @@ export function TypingMode() {
             onClick={() => goTo(-1)}
             disabled={cueIndex === 0}
           >
-            ← PREV
+            ← {t('typing.prev')}
           </PixelButton>
           <PixelButton variant="accent" onClick={checkAnswer} disabled={!input.trim()}>
-            CHECK
+            {t('typing.check')}
           </PixelButton>
           <PixelButton
             variant="ghost"
@@ -173,7 +175,7 @@ export function TypingMode() {
             onClick={() => goTo(1)}
             disabled={cueIndex >= subtitles.length - 1}
           >
-            NEXT →
+            {t('typing.next')} →
           </PixelButton>
         </div>
 
@@ -181,9 +183,9 @@ export function TypingMode() {
           <div
             className={`typing-result ${result.perfect ? 'perfect' : result.accuracy >= 80 ? 'good' : result.accuracy >= 50 ? 'ok' : 'bad'}`}
           >
-            <p className="accuracy-score">{result.accuracy}% match</p>
-            <p className="expected-text">Expected: {english}</p>
-            <p className="typed-text">You typed: {input}</p>
+            <p className="accuracy-score">{result.accuracy}% {t('typing.match')}</p>
+            <p className="expected-text">{t('typing.expected')}: {english}</p>
+            <p className="typed-text">{t('typing.you_typed')}: {input}</p>
           </div>
         )}
       </div>

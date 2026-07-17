@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/appStore';
+import { useI18n } from './context/I18nContext';
 import { MediaProvider, useMediaRef } from './context/MediaContext';
 import { MediaPlayer } from './components/MediaPlayer/MediaPlayer';
 import { PlaybackControls } from './components/PlaybackControls/PlaybackControls';
@@ -106,6 +107,7 @@ function ABLoopHandler() {
 }
 
 function AppContent() {
+  const { t } = useI18n();
   const {
     practiceMode,
     setPracticeMode,
@@ -133,6 +135,34 @@ function AppContent() {
   } = useAppStore();
 
   const [sideTab, setSideTab] = useState<Tab>('subtitles');
+  const [sidePanelWidth, setSidePanelWidth] = useState(480);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startWidth = sidePanelWidth;
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      const diff = startX - ev.clientX;
+      const newWidth = Math.max(320, Math.min(800, startWidth + diff));
+      setSidePanelWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   useEffect(() => {
     loadFromStore<FavoriteItem>('favorites').then(setFavorites);
@@ -241,7 +271,7 @@ function AppContent() {
           <span className="logo-icon">🎧</span>
           <h1>PIXEL LISTEN</h1>
         </div>
-        <p className="tagline">Listen · Type · Shadow · Review</p>
+        <p className="tagline">{t('header.tagline')}</p>
 
         <nav className="mode-nav">
           {(['listen', 'typing', 'recording'] as const).map((mode) => (
@@ -251,7 +281,7 @@ function AppContent() {
               className={`mode-btn ${practiceMode === mode ? 'active' : ''}`}
               onClick={() => setPracticeMode(mode)}
             >
-              {mode === 'listen' ? '🎵 LISTEN' : mode === 'typing' ? '⌨ TYPE' : '🎤 SHADOW'}
+              {mode === 'listen' ? t('mode.listen') : mode === 'typing' ? t('mode.typing') : t('mode.recording')}
             </button>
           ))}
         </nav>
@@ -265,28 +295,35 @@ function AppContent() {
           {practiceMode === 'recording' && <RecordingMode />}
         </section>
 
-        <aside className="side-panel">
-          <nav className="side-tabs">
+        <aside className="side-panel side-panel-vertical" style={{ width: sidePanelWidth }}>
+          <div
+            className="side-resize-handle"
+            onMouseDown={handleResizeMouseDown}
+            title="Drag to resize"
+          />
+          <nav className="side-tabs-vertical">
             {(
               [
-                ['subtitles', 'SUBS'],
-                ['favorites', '★ FAV'],
-                ['anki', ankiCart.length > 0 ? `🛒 ${ankiCart.length}` : 'ANKI'],
-                ['settings', '⚙'],
-              ] as [Tab, string][]
-            ).map(([tab, label]) => (
+                ['subtitles', '📝', t('common.subs')],
+                ['favorites', '★', t('common.favorites').replace('★ ', '')],
+                ['anki', '🛒', ankiCart.length > 0 ? `${ankiCart.length}` : t('common.anki')],
+                ['settings', '⚙', ''],
+              ] as [Tab, string, string][]
+            ).map(([tab, icon, label]) => (
               <button
                 key={tab}
                 type="button"
-                className={`side-tab ${sideTab === tab ? 'active' : ''}`}
+                className={`side-tab-vertical ${sideTab === tab ? 'active' : ''}`}
                 onClick={() => setSideTab(tab)}
+                title={label || tab}
               >
-                {label}
+                <span className="side-tab-icon">{icon}</span>
+                {label && <span className="side-tab-label">{label}</span>}
               </button>
             ))}
           </nav>
 
-          <div className="side-content">
+          <div className="side-content-vertical">
             {sideTab === 'subtitles' && <SubtitlePanel />}
             {sideTab === 'favorites' && <FavoritesPanel />}
             {sideTab === 'anki' && <AnkiExportPanel />}

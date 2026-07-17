@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type {
   ABLoopSegment,
   AnkiCartItem,
+  AnkiCardFormat,
+  CartItemFormat,
+  ClozeConfig,
   FavoriteItem,
   GrammarAnalysis,
   MediaFile,
@@ -93,6 +96,9 @@ interface AppState {
   removeFromAnkiCart: (id: string) => void;
   mergeAnkiCartItems: (ids: string[]) => void;
   clearAnkiCart: () => void;
+  updateAnkiCartItemFormats: (itemId: string, formats: CartItemFormat[]) => void;
+  addFormatToAnkiCartItem: (itemId: string, format: AnkiCardFormat, clozeConfig?: ClozeConfig) => void;
+  removeFormatFromAnkiCartItem: (itemId: string, format: AnkiCardFormat) => void;
 
   setPracticeMode: (mode: PracticeMode) => void;
   setOpenaiApiKey: (key: string) => void;
@@ -293,6 +299,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       start: g.start,
       end: g.end,
       addedAt: Date.now(),
+      formats: [{ format: 'colloquial' }], // Default format
     }));
 
     set({ ankiCart: [...items, ...ankiCart] });
@@ -329,12 +336,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       start: Math.min(...selected.map((item) => item.start)),
       end: Math.max(...selected.map((item) => item.end)),
       addedAt: Date.now(),
+      formats: [{ format: 'colloquial' }], // Default format for merged items
     };
 
     const remaining = ankiCart.filter((item) => !idSet.has(item.id));
     set({ ankiCart: [merged, ...remaining] });
   },
   clearAnkiCart: () => set({ ankiCart: [] }),
+  updateAnkiCartItemFormats: (itemId, formats) =>
+    set((s) => ({
+      ankiCart: s.ankiCart.map((item) =>
+        item.id === itemId ? { ...item, formats } : item
+      ),
+    })),
+  addFormatToAnkiCartItem: (itemId, format, clozeConfig) =>
+    set((s) => ({
+      ankiCart: s.ankiCart.map((item) => {
+        if (item.id !== itemId) return item;
+        // Check if format already exists
+        if (item.formats.some((f) => f.format === format)) return item;
+        const newFormats = [...item.formats, { format, clozeConfig }];
+        return { ...item, formats: newFormats };
+      }),
+    })),
+  removeFormatFromAnkiCartItem: (itemId, format) =>
+    set((s) => ({
+      ankiCart: s.ankiCart.map((item) =>
+        item.id === itemId
+          ? { ...item, formats: item.formats.filter((f) => f.format !== format) }
+          : item
+      ),
+    })),
 
   setPracticeMode: (mode) => set({ practiceMode: mode }),
   setOpenaiApiKey: (key) => set({ openaiApiKey: key }),

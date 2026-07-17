@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { AnkiCard } from '../types';
+import type { AnkiCard, ClozeConfig, CartItemFormat } from '../types';
 
 /** yyyymmdd_HHmmss_<6-char uid> — safe for all file systems */
 function generateMediaFilename(ext: string): string {
@@ -309,4 +309,93 @@ export function buildAiCards(
     tags: ['pixel-listen', 'ai-recommended'],
     mode: 'ai' as const,
   }));
+}
+
+/**
+ * Generate cards from a cart item with specific formats
+ * Supports multiple formats for the same item:
+ * - colloquial: Front=translation, Back=English+audio/video
+ * - listening_review: Front=audio/video, Back=English+translation
+ * - cloze_deletion: Front=fill-in-the-blank, Back=answers
+ */
+export function buildMultiFormatCards(
+  item: {
+    text: string;
+    translation?: string;
+    nativeTranslation?: string;
+    start?: number;
+    end?: number;
+    formats: CartItemFormat[];
+  }
+): AnkiCard[] {
+  const cards: AnkiCard[] = [];
+  const baseTranslation = item.translation?.trim() || item.nativeTranslation?.trim() || '';
+
+  for (const fmt of item.formats) {
+    let front = '';
+    let back = '';
+    let tags: string[] = ['pixel-listen', 'cart'];
+
+    switch (fmt.format) {
+      case 'colloquial':
+        // 常用口语: Front=translation, Back=English+media
+        front = baseTranslation || item.text;
+        back = item.text;
+        tags.push('colloquial');
+        break;
+
+      case 'listening_review':
+        // 听力复习: Front=media, Back=English+translation
+        front = '[AUDIO]'; // Placeholder for audio/video
+        back = item.text;
+        if (baseTranslation) {
+          back += `<br><br><em>${baseTranslation}</em>`;
+        }
+        tags.push('listening-review');
+        break;
+
+      case 'cloze_deletion':
+        // 完形填空: Front=sentence with blanks, Back=answers
+        if (fmt.clozeConfig) {
+          const clozeText = generateClozeSentence(item.text, fmt.clozeConfig);
+          const answers = generateClozeAnswers(item.text, fmt.clozeConfig);
+          front = clozeText;
+          back = answers.join('<br>');
+          tags.push('cloze-deletion');
+        }
+        break;
+    }
+
+    if (front && back) {
+      cards.push({
+        front,
+        back,
+        audioStart: item.start,
+        audioEnd: item.end,
+        tags,
+        mode: 'cart' as const,
+      });
+    }
+  }
+
+  return cards;
+}
+
+/**
+ * Generate a sentence with blanks for cloze deletion
+ */
+export function generateClozeSentence(text: string, config: ClozeConfig): string {
+  let result = text;
+  const blanks = [...config.blanks].sort((a, b) => b.start - a.start);
+  for (const blank of blanks) {
+    result = result.substring(0, blank.start) + '______' + result.substring(blank.end);
+  }
+  return result;
+}
+
+/**
+ * Generate answer list for cloze deletion
+ */
+export function generateClozeAnswers(text: string, config: ClozeConfig): string[] {
+  return config.blanks.map((blank) => text.substring(blank.start, blank.end));
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { useI18n } from '../../context/I18nContext';
 import { deleteFromStore } from '../../utils/storage';
 import { ConfirmDialog, PixelButton, PixelPanel, PixelBadge } from '../PixelUI';
 import type { FavoriteType } from '../../types';
@@ -11,6 +12,8 @@ const TYPE_LABELS: Record<FavoriteType, string> = {
   sentence: 'SENTENCE',
 };
 
+// These are only used as fallback keys; actual labels come from i18n via typeLabels in component
+
 const TYPE_COLORS: Record<FavoriteType, string> = {
   word: 'green',
   collocation: 'blue',
@@ -19,6 +22,7 @@ const TYPE_COLORS: Record<FavoriteType, string> = {
 };
 
 export function FavoritesPanel() {
+  const { t } = useI18n();
   const { favorites, addFavorite, removeFavorite, removeFavorites } = useAppStore();
   const [newText, setNewText] = useState('');
   const [newType, setNewType] = useState<FavoriteType>('word');
@@ -26,6 +30,13 @@ export function FavoritesPanel() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBatch, setConfirmBatch] = useState(false);
+
+  const typeLabels: Record<FavoriteType, string> = {
+    word: t('fav.type_word'),
+    collocation: t('fav.type_colloc'),
+    phrase: t('fav.type_phrase'),
+    sentence: t('fav.type_sentence'),
+  };
 
   const filtered =
     filter === 'all' ? favorites : favorites.filter((f) => f.type === filter);
@@ -90,25 +101,25 @@ export function FavoritesPanel() {
   ).length;
 
   return (
-    <PixelPanel title="FAVORITES">
+    <PixelPanel title={t('panel.favorites')}>
       <ConfirmDialog
         open={pendingDeleteId != null}
-        title="Delete favorite?"
+        title={t('fav.delete_title')}
         message={
           pendingItem
-            ? `Remove “${pendingItem.text.slice(0, 80)}${pendingItem.text.length > 80 ? '…' : ''}” from favorites?`
-            : 'Remove this favorite?'
+            ? `Remove "${pendingItem.text.slice(0, 80)}${pendingItem.text.length > 80 ? '…' : ''}" from favorites?`
+            : t('fav.delete_msg')
         }
-        confirmLabel="DELETE"
+        confirmLabel={t('fav.delete_label')}
         danger
         onConfirm={confirmDelete}
         onCancel={() => setPendingDeleteId(null)}
       />
       <ConfirmDialog
         open={confirmBatch}
-        title="Delete selected?"
-        message={`Remove ${selectedIds.size} favorite(s)? This cannot be undone.`}
-        confirmLabel="DELETE ALL"
+        title={t('fav.delete_batch_title')}
+        message={t('fav.delete_batch_msg').replace('{count}', String(selectedIds.size))}
+        confirmLabel={t('fav.delete_batch_label')}
         danger
         onConfirm={confirmBatchDelete}
         onCancel={() => setConfirmBatch(false)}
@@ -120,7 +131,7 @@ export function FavoritesPanel() {
           value={newType}
           onChange={(e) => setNewType(e.target.value as FavoriteType)}
         >
-          {Object.entries(TYPE_LABELS).map(([k, v]) => (
+          {Object.entries(typeLabels).map(([k, v]) => (
             <option key={k} value={k}>
               {v}
             </option>
@@ -128,7 +139,7 @@ export function FavoritesPanel() {
         </select>
         <input
           className="pixel-input"
-          placeholder="Add word, phrase, or sentence..."
+          placeholder={t('fav.placeholder')}
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
@@ -139,14 +150,14 @@ export function FavoritesPanel() {
       </div>
 
       <div className="favorites-filter">
-        {(['all', 'word', 'collocation', 'phrase', 'sentence'] as const).map((t) => (
+        {(['all', 'word', 'collocation', 'phrase', 'sentence'] as const).map((ft) => (
           <button
-            key={t}
+            key={ft}
             type="button"
-            className={`filter-chip ${filter === t ? 'active' : ''}`}
-            onClick={() => setFilter(t)}
+            className={`filter-chip ${filter === ft ? 'active' : ''}`}
+            onClick={() => setFilter(ft)}
           >
-            {t === 'all' ? 'ALL' : TYPE_LABELS[t]}
+            {ft === 'all' ? t('fav.filter_all') : typeLabels[ft]}
           </button>
         ))}
       </div>
@@ -154,7 +165,7 @@ export function FavoritesPanel() {
       {filtered.length > 0 && (
         <div className="favorites-batch-bar">
           <PixelButton variant="ghost" size="sm" onClick={selectAllFiltered}>
-            {filtered.every((f) => selectedIds.has(f.id)) ? 'DESELECT' : 'SELECT ALL'}
+            {filtered.every((f) => selectedIds.has(f.id)) ? t('fav.deselect') : t('fav.select_all')}
           </PixelButton>
           <PixelButton
             variant="danger"
@@ -162,14 +173,14 @@ export function FavoritesPanel() {
             disabled={selectedCount === 0}
             onClick={() => setConfirmBatch(true)}
           >
-            DELETE ({selectedCount})
+            {t('fav.delete_count').replace('{count}', String(selectedCount))}
           </PixelButton>
         </div>
       )}
 
       <div className="favorites-list">
         {filtered.length === 0 ? (
-          <p className="empty-hint">Save words & sentences from subtitles</p>
+          <p className="empty-hint">{t('fav.empty_hint')}</p>
         ) : (
           filtered.map((item) => (
             <div key={item.id} className="favorite-item">
@@ -180,7 +191,7 @@ export function FavoritesPanel() {
                   onChange={() => toggleSelect(item.id)}
                 />
               </label>
-              <PixelBadge color={TYPE_COLORS[item.type]}>{TYPE_LABELS[item.type]}</PixelBadge>
+              <PixelBadge color={TYPE_COLORS[item.type]}>{typeLabels[item.type]}</PixelBadge>
               <div className="favorite-content">
                 <p className="favorite-text cue-text">{item.text}</p>
                 {item.translation && (

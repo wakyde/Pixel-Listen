@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
+import { useI18n } from '../../context/I18nContext';
 import { getActiveCue } from '../../utils/subtitleParser';
 import { safePlay, safePause } from '../../utils/mediaControl';
 import { seekTo } from '../../utils/mediaControl';
@@ -35,6 +36,7 @@ export function MediaPlayer() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const { t } = useI18n();
   const activeCue = getActiveCue(subtitles, currentTime);
 
   useEffect(() => {
@@ -95,18 +97,33 @@ export function MediaPlayer() {
       setSubtitles([]);
       setSubtitleFile(null);
 
+      // Determine correct mime type
+      let mimeType = file.type;
+      if (!mimeType) {
+        const mimeMap: Record<string, string> = {
+          mp4: 'video/mp4',
+          mkv: 'video/x-matroska',
+          webm: 'video/webm',
+          mp3: 'audio/mpeg',
+          m4a: 'audio/mp4',
+          wav: 'audio/wav',
+          ogg: 'audio/ogg',
+        };
+        mimeType = mimeMap[ext] || (isVideo ? 'video/mp4' : 'audio/mpeg');
+      }
+
       const newMedia = {
         name: file.name,
         url: URL.createObjectURL(file),
         type: (isVideo ? 'video' : 'audio') as 'video' | 'audio',
-        mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
+        mimeType,
         file,
       };
       setMedia(newMedia);
       addRecentMedia({
         name: file.name,
         type: isVideo ? 'video' : 'audio',
-        mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
+        mimeType,
         fileHandle: undefined,
       });
     },
@@ -115,17 +132,17 @@ export function MediaPlayer() {
 
   const loadRecentMedia = async (item: { name: string; type: 'video' | 'audio'; mimeType: string; fileHandle?: FileSystemFileHandle | null; }) => {
     if (!item.fileHandle) {
-      alert('No file handle available for this recent media item. Re-import the file manually.');
+      alert(t('media.no_file_handle'));
       return;
     }
 
     try {
       const file = await item.fileHandle.getFile();
-      if (!file) throw new Error('Unable to access media file.');
+      if (!file) throw new Error(t('media.unable_access'));
       const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
       const isVideo = ['mp4', 'mkv', 'webm'].includes(ext);
       const isAudio = ['mp3', 'm4a', 'wav', 'ogg'].includes(ext);
-      if (!isVideo && !isAudio) throw new Error('Unsupported media file type.');
+      if (!isVideo && !isAudio) throw new Error(t('media.unsupported_type'));
 
       const prev = useAppStore.getState().media;
       if (prev) URL.revokeObjectURL(prev.url);
@@ -147,7 +164,7 @@ export function MediaPlayer() {
         fileHandle: item.fileHandle,
       });
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to restore recent media.');
+      alert(err instanceof Error ? err.message : t('media.restore_failed'));
     }
   };
 
@@ -207,10 +224,10 @@ export function MediaPlayer() {
       >
         <div className="dropzone-content">
           <div className="pixel-icon-headphones" />
-          <p className="dropzone-title">DROP MEDIA HERE</p>
-          <p className="dropzone-hint">MP4 · MKV · MP3 · WAV · WEBM</p>
+          <p className="dropzone-title">{t('media.drop_zone')}</p>
+          <p className="dropzone-hint">{t('media.formats')}</p>
           <label className="pixel-file-label" onClick={(e) => e.stopPropagation()}>
-            <span className="pixel-btn pixel-btn-accent">BROWSE FILES</span>
+            <span className="pixel-btn pixel-btn-accent">{t('media.browse_files')}</span>
             <input
               ref={fileInputRef}
               type="file"
@@ -225,7 +242,7 @@ export function MediaPlayer() {
           </label>
           {recentMedia.length > 0 && (
             <div className="recent-media-section">
-              <span className="recent-media-label">RECENT MEDIA</span>
+              <span className="recent-media-label">{t('media.recent')}</span>
               <div className="recent-media-list">
                 {recentMedia.map((item) => (
                   <button
@@ -250,7 +267,6 @@ export function MediaPlayer() {
   }
 
   const mediaProps = {
-    src: media.url,
     onTimeUpdate: (e: React.SyntheticEvent<HTMLMediaElement>) => {
       setCurrentTime(e.currentTarget.currentTime);
     },
@@ -281,11 +297,18 @@ export function MediaPlayer() {
           className="media-element"
           onClick={togglePlay}
           playsInline
+          crossOrigin="anonymous"
           {...mediaProps}
-        />
+        >
+          <source src={media.url} type={media.mimeType} />
+          <p>{t('media.unsupported_video')}</p>
+        </video>
       ) : (
         <div className="audio-visualizer">
-          <audio ref={mediaRef as React.RefObject<HTMLAudioElement>} {...mediaProps} />
+          <audio ref={mediaRef as React.RefObject<HTMLAudioElement>} {...mediaProps}>
+            <source src={media.url} type={media.mimeType} />
+            {t('media.unsupported_audio')}
+          </audio>
           <div className="audio-wave" onClick={togglePlay}>
             {Array.from({ length: 16 }).map((_, i) => (
               <div
@@ -313,7 +336,7 @@ export function MediaPlayer() {
             <p className="subtitle-translation">{translation}</p>
           )}
           {(videoSubtitleMode === 'zh' || videoSubtitleMode === 'both') && !translation && (
-            <p className="subtitle-translation subtitle-unavailable">Translation unavailable</p>
+            <p className="subtitle-translation subtitle-unavailable">{t('media.translation_unavailable')}</p>
           )}
         </div>
       )}
@@ -323,8 +346,8 @@ export function MediaPlayer() {
           type="button"
           className="fullscreen-button"
           onClick={() => void toggleFullscreen()}
-          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+          aria-label={isFullscreen ? t('media.exit_fullscreen') : t('media.enter_fullscreen')}
+          title={isFullscreen ? t('media.exit_fullscreen') : t('media.fullscreen')}
         >
           {isFullscreen ? '×' : '⛶'}
         </button>

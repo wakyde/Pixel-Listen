@@ -153,3 +153,5 @@ export function ConfirmDialog({
     </div>
   );
 }
+
+export { Drawer } from './Drawer';

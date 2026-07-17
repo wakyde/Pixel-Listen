@@ -28,6 +28,24 @@ export interface SubtitleCue {
 /** Video overlay subtitle display mode */
 export type VideoSubtitleMode = 'en' | 'zh' | 'both' | 'off';
 
+/** Cloze deletion configuration for complete sentence fill-in-the-blanks */
+export interface ClozeConfig {
+  /** List of ranges to blank out: [{ start: 0, end: 5 }, ...] */
+  blanks: { start: number; end: number }[];
+  /** Original text for reference */
+  originalText: string;
+}
+
+/** Card format type */
+export type AnkiCardFormat = 'colloquial' | 'listening_review' | 'cloze_deletion';
+
+/** Single format configuration for a cart item */
+export interface CartItemFormat {
+  format: AnkiCardFormat;
+  /** For cloze_deletion format, the cloze configuration */
+  clozeConfig?: ClozeConfig;
+}
+
 export interface AnkiCartItem {
   id: string;
   cueIds: string[];
@@ -37,6 +55,8 @@ export interface AnkiCartItem {
   start: number;
   end: number;
   addedAt: number;
+  /** Formats to export this item as (supports multiple) */
+  formats: CartItemFormat[];
 }
 
 export type SubtitleFormat = 'srt' | 'vtt' | 'ass' | 'none';

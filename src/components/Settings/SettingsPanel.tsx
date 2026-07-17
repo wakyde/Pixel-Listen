@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { useI18n } from '../../context/I18nContext';
 import { ConfirmDialog, PixelButton, PixelPanel, PixelInput } from '../PixelUI';
 
 export function SettingsPanel() {
+  const { t, language, setLanguage } = useI18n();
   const {
     openaiApiKey,
     setOpenaiApiKey,
@@ -36,7 +38,7 @@ export function SettingsPanel() {
     setDirPickError('');
     try {
       if (!('showDirectoryPicker' in window)) {
-        setDirPickError('Directory picker not supported in this browser.');
+        setDirPickError(t('settings.dir_not_supported'));
         return;
       }
       const handle = await (window as Window & typeof globalThis & {
@@ -45,18 +47,18 @@ export function SettingsPanel() {
       setAnkiMediaDirHandle(handle);
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setDirPickError('Could not access directory. Make sure you grant write permission.');
+        setDirPickError(t('settings.dir_access_error'));
       }
     }
   };
 
   return (
-    <PixelPanel title="SETTINGS">
+    <PixelPanel title={t('panel.settings')}>
       <ConfirmDialog
         open={confirmClear}
-        title="Clear media?"
-        message="This removes the loaded media and all subtitles from the session. Favorites are kept."
-        confirmLabel="CLEAR"
+        title={t('settings.clear_media_title')}
+        message={t('settings.clear_media_msg')}
+        confirmLabel={t('settings.clear_media')}
         danger
         onConfirm={clearMedia}
         onCancel={() => setConfirmClear(false)}
@@ -64,8 +66,29 @@ export function SettingsPanel() {
 
       <div className="settings-form">
         <label className="settings-label">
-          OpenAI API Key
-          <span className="settings-hint">For AI transcription, translation, grammar &amp; Anki</span>
+          {t('settings.language')}
+          <span className="settings-hint">{t('settings.language_hint')}</span>
+        </label>
+        <div className="language-selector">
+          <PixelButton
+            variant={language === 'zh' ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={() => setLanguage('zh')}
+          >
+            {t('settings.language_zh')}
+          </PixelButton>
+          <PixelButton
+            variant={language === 'en' ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={() => setLanguage('en')}
+          >
+            {t('settings.language_en')}
+          </PixelButton>
+        </div>
+
+        <label className="settings-label">
+          {t('settings.api_key')}
+          <span className="settings-hint">{t('settings.api_key_hint')}</span>
         </label>
         <div className="api-key-row">
           <PixelInput
@@ -75,29 +98,27 @@ export function SettingsPanel() {
             placeholder="sk-..."
           />
           <PixelButton variant="ghost" size="sm" onClick={() => setShowKey(!showKey)}>
-            {showKey ? 'HIDE' : 'SHOW'}
+            {showKey ? t('settings.hide') : t('settings.show')}
           </PixelButton>
         </div>
 
-        <label className="settings-label">Translation Target Language</label>
+        <label className="settings-label">{t('settings.target_lang')}</label>
         <PixelInput
           value={targetLanguage}
           onChange={(e) => setTargetLanguage(e.target.value)}
-          placeholder="Chinese, Japanese, Spanish..."
+          placeholder={t('settings.target_lang_placeholder')}
         />
 
         <label className="settings-label">
-          Anki Media Folder
-          <span className="settings-hint">
-            When set, audio/video clips are written directly here on export — no manual unzip needed.
-          </span>
+          {t('settings.anki_folder')}
+          <span className="settings-hint">{t('settings.anki_folder_hint')}</span>
         </label>
         <div className="anki-dir-row">
           <span className="anki-dir-path">
-            {ankiMediaDirHandle ? `📂 ${ankiMediaDirHandle.name}` : 'Not set — exports will be ZIP files'}
+            {ankiMediaDirHandle ? `📂 ${ankiMediaDirHandle.name}` : t('settings.anki_not_set')}
           </span>
           <PixelButton variant="secondary" size="sm" onClick={() => void pickAnkiMediaDir()}>
-            BROWSE
+            {t('settings.browse')}
           </PixelButton>
           {ankiMediaDirHandle && (
             <PixelButton variant="ghost" size="sm" onClick={() => setAnkiMediaDirHandle(null)}>
@@ -108,16 +129,16 @@ export function SettingsPanel() {
         {dirPickError && <p className="settings-error">{dirPickError}</p>}
 
         <PixelButton variant="accent" onClick={handleSave}>
-          {saved ? '✓ SAVED' : 'SAVE SETTINGS'}
+          {saved ? t('settings.saved') : t('settings.save')}
         </PixelButton>
 
         {media && (
           <div className="settings-media">
             <p className="settings-media-name" title={media.name}>
-              Current: {media.name}
+              {t('settings.current_media')} {media.name}
             </p>
             <PixelButton variant="danger" size="sm" onClick={() => setConfirmClear(true)}>
-              CLEAR MEDIA
+              {t('settings.clear_media')}
             </PixelButton>
           </div>
         )}

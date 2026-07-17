@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../store/appStore';
+import { useI18n } from '../../context/I18nContext';
 import { useMediaRef } from '../../context/MediaContext';
 import { getEnglishText } from '../../utils/bilingualText';
 import { safePlay, safePause, seekTo } from '../../utils/mediaControl';
@@ -18,6 +19,7 @@ interface Recording {
 }
 
 export function RecordingMode() {
+  const { t } = useI18n();
   const mediaRef = useMediaRef();
   const { media, subtitles, currentTime, setCurrentTime, setIsPlaying } = useAppStore();
   const [cueIndex, setCueIndex] = useState(0);
@@ -141,7 +143,7 @@ export function RecordingMode() {
         await beginMicCapture();
       }
     } catch {
-      alert('Microphone access denied. Please allow microphone permissions.');
+      alert(t('recording.mic_denied'));
       setPhase('idle');
     }
   };
@@ -168,28 +170,28 @@ export function RecordingMode() {
 
   if (subtitles.length === 0) {
     return (
-      <PixelPanel title="VOICE RECORDING">
-        <p className="empty-hint">Load subtitles first to practice shadowing</p>
+      <PixelPanel title={t('recording.title')}>
+        <p className="empty-hint">{t('recording.empty_hint')}</p>
       </PixelPanel>
     );
   }
 
   const phaseLabel =
     phase === 'playing'
-      ? '▶ Playing original…'
+      ? t('recording.phase_playing')
       : phase === 'recording'
-        ? '● REC — speak now'
+        ? t('recording.phase_recording')
         : phase === 'scoring'
-          ? '⏳ Scoring…'
+          ? t('recording.phase_scoring')
           : null;
 
   return (
-    <PixelPanel title="VOICE RECORDING">
+    <PixelPanel title={t('recording.title')}>
       <ConfirmDialog
         open={pendingClear}
-        title="Clear recordings?"
-        message="Delete all shadowing recordings from this session? This cannot be undone."
-        confirmLabel="CLEAR"
+        title={t('recording.clear_title')}
+        message={t('recording.clear_msg')}
+        confirmLabel={t('recording.clear_label')}
         danger
         onConfirm={clearRecordings}
         onCancel={() => setPendingClear(false)}
@@ -198,7 +200,7 @@ export function RecordingMode() {
       <div className={`recording-mode${showBurst ? ' success-burst' : ''}`}>
         {showBurst && lastScore != null && (
           <div className="success-fx" aria-hidden>
-            🎯 {lastScore}! GREAT!
+            {t('recording.great').replace('{score}', String(lastScore))}
           </div>
         )}
 
@@ -224,7 +226,7 @@ export function RecordingMode() {
               onClick={() => void playOriginal()}
               disabled={phase !== 'idle'}
             >
-              🔊 ORIGINAL
+              {t('recording.original')}
             </PixelButton>
             <PixelButton
               variant="ghost"
@@ -254,11 +256,11 @@ export function RecordingMode() {
               onClick={() => void startShadowing()}
               disabled={phase === 'scoring'}
             >
-              🎤 START SHADOWING
+              {t('recording.start_shadowing')}
             </PixelButton>
           ) : (
             <PixelButton variant="danger" onClick={stopRecording}>
-              ⏹ STOP
+              {t('recording.stop')}
             </PixelButton>
           )}
           {phaseLabel && <span className="recording-indicator">{phaseLabel}</span>}
@@ -266,16 +268,16 @@ export function RecordingMode() {
 
         {lastScore != null && phase === 'idle' && (
           <p className={`shadow-score ${lastScore >= 90 ? 'high' : lastScore >= 70 ? 'mid' : 'low'}`}>
-            SCORE: {lastScore}/100
+            {t('recording.score_label').replace('{score}', String(lastScore))}
           </p>
         )}
 
         {recordings.length > 0 && (
           <div className="recordings-list">
             <div className="recordings-header-row">
-              <h4>YOUR RECORDINGS</h4>
+              <h4>{t('recording.your_recordings')}</h4>
               <PixelButton variant="ghost" size="sm" onClick={() => setPendingClear(true)}>
-                CLEAR
+                {t('recording.clear_btn')}
               </PixelButton>
             </div>
             {recordings.slice(0, 10).map((rec) => (

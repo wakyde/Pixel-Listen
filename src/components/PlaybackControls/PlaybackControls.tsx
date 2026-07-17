@@ -1,19 +1,15 @@
 import { useCallback } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
+import { useI18n } from '../../context/I18nContext';
 import { safePlay, safePause, seekTo } from '../../utils/mediaControl';
 import { PixelButton, formatTimeDisplay } from '../PixelUI';
 import type { ABLoopSegment, VideoSubtitleMode } from '../../types';
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const SUBTITLE_MODES: { value: VideoSubtitleMode; label: string }[] = [
-  { value: 'en', label: 'EN only' },
-  { value: 'zh', label: 'Translation only' },
-  { value: 'both', label: 'EN + Translation' },
-  { value: 'off', label: 'Hidden' },
-];
 
 export function PlaybackControls() {
+  const { t } = useI18n();
   const mediaRef = useMediaRef();
   const {
     media,
@@ -87,7 +83,7 @@ export function PlaybackControls() {
           max={duration > 0 ? duration : 100}
           step={0.05}
           value={Number.isFinite(currentTime) ? currentTime : 0}
-          aria-label="Seek"
+          aria-label={t('common.seek')}
           onChange={(e) => seek(parseFloat(e.target.value))}
         />
         <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -109,14 +105,14 @@ export function PlaybackControls() {
           <div
             className="ab-marker ab-a"
             style={{ left: `${Math.min(100, (pointA / duration) * 100)}%` }}
-            title="Point A"
+            title={t('playback.point_a')}
           />
         )}
         {pointB != null && duration > 0 && (
           <div
             className="ab-marker ab-b"
             style={{ left: `${Math.min(100, (pointB / duration) * 100)}%` }}
-            title="Point B"
+            title={t('playback.point_b')}
           />
         )}
       </div>
@@ -132,23 +128,23 @@ export function PlaybackControls() {
             size="sm"
             onClick={() => seek(Math.max(0, currentTime - 5))}
           >
-            ⏪ 5s
+            {t('playback.back_5s')}
           </PixelButton>
           <PixelButton variant="primary" onClick={togglePlay}>
-            {isPlaying ? '⏸ PAUSE' : '▶ PLAY'}
+            {isPlaying ? t('playback.pause') : t('playback.play')}
           </PixelButton>
           <PixelButton
             variant="ghost"
             size="sm"
             onClick={() => seek(Math.min(duration || currentTime + 5, currentTime + 5))}
           >
-            5s ⏩
+            {t('playback.forward_5s')}
           </PixelButton>
         </div>
 
         <div className="playback-options">
           <div className="speed-controls">
-            <span className="control-label">SPEED</span>
+            <span className="control-label">{t('playback.speed')}</span>
             {RATES.map((r) => (
               <button
                 key={r}
@@ -161,20 +157,19 @@ export function PlaybackControls() {
             ))}
           </div>
           <label className="subtitle-mode-control">
-            <span className="control-label">SUBS</span>
+            <span className="control-label">{t('playback.subs')}</span>
             <select
               className="pixel-select video-sub-select"
               value={videoSubtitleMode}
               onChange={(event) =>
                 setVideoSubtitleMode(event.target.value as VideoSubtitleMode)
               }
-              aria-label="Video subtitle display"
+              aria-label={t('common.video_subs')}
             >
-              {SUBTITLE_MODES.map((mode) => (
-                <option key={mode.value} value={mode.value}>
-                  {mode.label}
-                </option>
-              ))}
+              <option value="en">{t('playback.en_only')}</option>
+              <option value="zh">{t('playback.translation_only')}</option>
+              <option value="both">{t('playback.en_translation')}</option>
+              <option value="off">{t('playback.hidden')}</option>
             </select>
           </label>
         </div>
@@ -183,10 +178,10 @@ export function PlaybackControls() {
       <div className="ab-loop-section">
         <div className="ab-controls">
           <PixelButton variant="secondary" size="sm" onClick={markA}>
-            SET A {pointA != null ? `(${formatTimeDisplay(pointA)})` : ''}
+            {t('playback.set_a')} {pointA != null ? `(${formatTimeDisplay(pointA)})` : ''}
           </PixelButton>
           <PixelButton variant="secondary" size="sm" onClick={markB}>
-            SET B {pointB != null ? `(${formatTimeDisplay(pointB)})` : ''}
+            {t('playback.set_b')} {pointB != null ? `(${formatTimeDisplay(pointB)})` : ''}
           </PixelButton>
           <PixelButton
             variant={abLoopActive ? 'accent' : 'ghost'}
@@ -194,7 +189,7 @@ export function PlaybackControls() {
             onClick={toggleABLoop}
             disabled={pointA == null || pointB == null}
           >
-            {abLoopActive ? '⟳ LOOP ON' : '⟳ LOOP'}
+            {abLoopActive ? `⟳${t('playback.loop_on')}` : t('playback.loop')}
           </PixelButton>
           <PixelButton
             variant="ghost"
@@ -202,13 +197,13 @@ export function PlaybackControls() {
             onClick={() => saveABSegment()}
             disabled={pointA == null || pointB == null}
           >
-            💾 SAVE
+            {t('playback.save')}
           </PixelButton>
         </div>
 
         {abHistory.length > 0 && (
           <div className="ab-history">
-            <span className="control-label">AB HISTORY</span>
+            <span className="control-label">{t('playback.ab_history')}</span>
             <div className="ab-history-list">
               {abHistory.slice(0, 8).map((seg) => (
                 <button

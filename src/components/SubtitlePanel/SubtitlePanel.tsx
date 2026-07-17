@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
+import { useI18n } from '../../context/I18nContext';
 import { parseASS, getSubtitleFormat } from '../../utils/assParser';
 import { parseSRT, parseVTT, getActiveCue } from '../../utils/subtitleParser';
 import { pickSubtitleFile, saveSubtitleFile } from '../../utils/subtitleSave';
@@ -19,6 +20,7 @@ import {
 import type { FavoriteType, SubtitleCue } from '../../types';
 
 export function SubtitlePanel() {
+  const { t } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const activeItemRef = useRef<HTMLDivElement>(null);
@@ -102,7 +104,7 @@ export function SubtitlePanel() {
   ) => {
     const format = getSubtitleFormat(file.name);
     if (!format) {
-      alert('Unsupported format. Use SRT, VTT, or ASS.');
+      alert(t('subs.unsupported_format'));
       return;
     }
 
@@ -111,7 +113,7 @@ export function SubtitlePanel() {
     if (format === 'ass') {
       const { preamble, cues } = parseASS(text);
       if (cues.length === 0) {
-        alert('No dialogue lines found in ASS file.');
+        alert(t('subs.no_dialogue'));
         return;
       }
       setSubtitles(cues);
@@ -127,7 +129,7 @@ export function SubtitlePanel() {
 
     const cues = format === 'vtt' ? parseVTT(text) : parseSRT(text);
     if (cues.length === 0) {
-      alert('No subtitles found. Please check the file format.');
+      alert(t('subs.no_subtitles'));
       return;
     }
     setSubtitles(cues);
@@ -181,7 +183,7 @@ export function SubtitlePanel() {
       const result = await lookupDictionary(query, openaiApiKey || undefined);
       setDictionaryResult(result);
     } catch {
-      setDictionaryError('Lookup failed. Try selecting a single word or phrase.');
+      setDictionaryError(t('subs.lookup_failed'));
     } finally {
       setDictionaryLoading(false);
     }
@@ -203,15 +205,15 @@ export function SubtitlePanel() {
     fileHandle?: FileSystemFileHandle | null;
   }) => {
     if (!item.fileHandle) {
-      alert('No file handle available for this recent subtitle file. Re-import it manually.');
+      alert(t('subs.no_file_handle'));
       return;
     }
     try {
       const file = await item.fileHandle.getFile();
-      if (!file) throw new Error('Unable to access subtitle file.');
+      if (!file) throw new Error(t('subs.unable_access'));
       await applySubtitleFile(file, item.fileHandle);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Failed to restore recent subtitle.');
+      alert(err instanceof Error ? err.message : t('subs.restore_failed'));
     }
   };
 
@@ -222,7 +224,7 @@ export function SubtitlePanel() {
     const result = await saveSubtitleFile(subtitleFile, subtitles);
     setIsSaving(false);
     setSaveMessage(result.message);
-    if (!result.success && result.message !== 'Save cancelled') {
+    if (!result.success && result.message !== t('subs.save_cancelled')) {
       alert(result.message);
     }
   };
@@ -240,7 +242,7 @@ export function SubtitlePanel() {
       alert(
         err instanceof Error
           ? err.message
-          : 'Transcription failed. Add OpenAI API key in Settings.'
+          : t('subs.transcription_failed')
       );
     } finally {
       setIsTranscribing(false);
@@ -283,7 +285,7 @@ export function SubtitlePanel() {
       if (translation && translation !== english) {
         updateCueTranslation(cue.id, translation);
       } else if (!openaiApiKey) {
-        alert('Add an OpenAI API key in Settings to translate, or use bilingual ASS files.');
+        alert(t('subs.api_key_needed'));
       }
     } finally {
       setIsTranslating(false);
@@ -407,7 +409,7 @@ export function SubtitlePanel() {
       updateCueTiming(editingCueId, editingCueStart, editingCueEnd);
     }
     if (editingCueEnd != null && editingCueStart != null && editingCueEnd < editingCueStart) {
-      alert('End time must be after start time.');
+      alert(t('subs.end_after_start'));
       return;
     }
     setEditingCueId(null);
@@ -451,46 +453,46 @@ export function SubtitlePanel() {
 
   if (!media) {
     return (
-      <PixelPanel title="SUBTITLES">
-        <p className="empty-hint">Load a media file first, then import subtitles</p>
+      <PixelPanel title={t('panel.subtitles')}>
+        <p className="empty-hint">{t('subs.empty_hint')}</p>
       </PixelPanel>
     );
   }
 
   return (
     <PixelPanel
-      title="SUBTITLES"
+      title={t('panel.subtitles')}
       className="subtitle-panel-root"
       actions={
         <div className="subtitle-actions">
           <PixelButton variant="ghost" size="sm" onClick={togglePanelSubtitles}>
-            {panelSubtitlesVisible ? '👁 ON' : '👁 OFF'}
+            {panelSubtitlesVisible ? t('subs.panel_on') : t('subs.panel_off')}
           </PixelButton>
         </div>
       }
     >
       <ConfirmDialog
         open={confirmAction === 'transcribe'}
-        title="Overwrite subtitles?"
-        message="AI transcription will replace all current subtitle lines. This cannot be undone."
-        confirmLabel="TRANSCRIBE"
+        title={t('subs.confirm_transcribe_title')}
+        message={t('subs.confirm_transcribe_msg')}
+        confirmLabel={t('subs.confirm_transcribe_label')}
         danger
         onConfirm={handleConfirm}
         onCancel={() => setConfirmAction(null)}
       />
       <ConfirmDialog
         open={confirmAction === 'translateAll'}
-        title="Translate all lines?"
-        message={`Reveal / translate every line to ${targetLanguage}? This may use API credits.`}
-        confirmLabel="TRANSLATE"
+        title={t('subs.confirm_translate_title')}
+        message={t('subs.confirm_translate_msg').replace('{lang}', targetLanguage)}
+        confirmLabel={t('subs.confirm_translate_label')}
         onConfirm={handleConfirm}
         onCancel={() => setConfirmAction(null)}
       />
       <ConfirmDialog
         open={confirmAction === 'overwriteImport'}
-        title="Replace subtitles?"
-        message="Importing will replace the current subtitle list. Unsaved edits will be lost."
-        confirmLabel="IMPORT"
+        title={t('subs.confirm_import_title')}
+        message={t('subs.confirm_import_msg')}
+        confirmLabel={t('subs.confirm_import_label')}
         danger
         onConfirm={handleConfirm}
         onCancel={() => {
@@ -501,7 +503,7 @@ export function SubtitlePanel() {
 
       <div className="subtitle-toolbar">
         <PixelButton variant="secondary" size="sm" onClick={handleImportClick}>
-          IMPORT
+          {t('subs.confirm_import_label')}
         </PixelButton>
         <input
           ref={fileRef}
@@ -518,7 +520,7 @@ export function SubtitlePanel() {
         />
         {subtitleFile && subtitles.length > 0 && (
           <PixelButton variant="primary" size="sm" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? '⏳...' : '💾 SAVE'}
+            {isSaving ? t('subs.saving') : t('subs.save')}
           </PixelButton>
         )}
         <PixelButton
@@ -527,7 +529,7 @@ export function SubtitlePanel() {
           onClick={handleAITranscribe}
           disabled={isTranscribing || !media}
         >
-          {isTranscribing ? '⏳ AI...' : '🤖 AI'}
+          {isTranscribing ? t('subs.ai_transcribing') : t('subs.ai_transcribe')}
         </PixelButton>
         {subtitles.length > 0 && (
           <PixelButton
@@ -536,13 +538,13 @@ export function SubtitlePanel() {
             onClick={handleTranslateAll}
             disabled={isTranslating}
           >
-            {isTranslating ? '⏳...' : '🌐 ALL'}
+            {isTranslating ? t('subs.translating') : t('subs.translate_all')}
           </PixelButton>
         )}
       </div>
       {recentSubtitleFiles.length > 0 && (
         <div className="recent-subtitle-list">
-          <span className="recent-subtitle-label">RECENT SUBTITLES</span>
+          <span className="recent-subtitle-label">{t('subs.recent_subtitles')}</span>
           <div className="recent-subtitle-items">
             {recentSubtitleFiles.map((item) => (
               <button
@@ -570,11 +572,11 @@ export function SubtitlePanel() {
 
       <div className="subtitle-list-wrap">
         {!panelSubtitlesVisible ? (
-          <p className="empty-hint">Subtitle list hidden (👁 OFF)</p>
+          <p className="empty-hint">{t('subs.panel_hidden_hint')}</p>
         ) : (
           <div className="subtitle-list" ref={listRef}>
             {subtitles.length === 0 ? (
-              <p className="empty-hint">Import SRT / VTT / ASS subtitles</p>
+              <p className="empty-hint">{t('subs.import_hint')}</p>
             ) : (
               subtitles.map((cue) => {
                 const isActive = activeCueId === cue.id;
@@ -648,7 +650,7 @@ export function SubtitlePanel() {
                         <p
                           className="cue-text"
                           onClick={(e) => void openDictionaryTooltip(cue, e)}
-                          title="Click to look up this line or selected text"
+                          title={t('subs.lookup_title')}
                         >
                           {cue.text}
                         </p>
@@ -657,7 +659,7 @@ export function SubtitlePanel() {
                           <p
                             className="cue-translation"
                             onClick={(e) => void openDictionaryTooltip(cue, e)}
-                            title="Click to look up this translation or selected text"
+                            title={t('subs.lookup_trans_title')}
                           >
                             {cue.translation ?? cue.nativeTranslation}
                           </p>
@@ -671,7 +673,7 @@ export function SubtitlePanel() {
                           variant="ghost"
                           size="sm"
                           onClick={() => startEdit(cue)}
-                          title="Edit"
+                          title={t('subs.edit_title')}
                         >
                           ✏️
                         </PixelButton>
@@ -681,8 +683,8 @@ export function SubtitlePanel() {
                           onClick={() => void handleTranslate(cue)}
                           disabled={isTranslating}
                           title={cue.translation || cue.nativeTranslation
-                            ? cue.translationHidden ? 'Show translation' : 'Hide translation'
-                            : 'Translate'}
+                            ? cue.translationHidden ? t('subs.show_trans') : t('subs.hide_trans')
+                            : t('subs.translate')}
                         >
                           {cue.translation || cue.nativeTranslation
                             ? cue.translationHidden ? '🌐' : '🙈'
@@ -693,7 +695,7 @@ export function SubtitlePanel() {
                           size="sm"
                           onClick={() => void handleGrammar(cue)}
                           disabled={isAnalyzing}
-                          title="Grammar"
+                          title={t('subs.grammar_title')}
                         >
                           📖
                         </PixelButton>
@@ -701,7 +703,7 @@ export function SubtitlePanel() {
                           variant="ghost"
                           size="sm"
                           onClick={() => saveFavorite('sentence', cue.text, cue.id)}
-                          title="Favorite"
+                          title={t('subs.favorite_title')}
                         >
                           ★
                         </PixelButton>
@@ -709,7 +711,7 @@ export function SubtitlePanel() {
                           variant={inCart(cue.id) ? 'accent' : 'ghost'}
                           size="sm"
                           onClick={() => toggleAnkiCue(cue.id)}
-                          title={inCart(cue.id) ? 'Remove from Anki cart' : 'Add to Anki cart'}
+                          title={inCart(cue.id) ? t('subs.remove_cart') : t('subs.add_cart')}
                         >
                           {inCart(cue.id) ? '✓🛒' : '🛒'}
                         </PixelButton>
@@ -769,7 +771,7 @@ export function SubtitlePanel() {
         )}
 
         {grammarDrawerOpen && (
-          <div className="grammar-drawer" role="dialog" aria-label="Grammar analysis">
+          <div className="grammar-drawer" role="dialog" aria-label={t('subs.grammar_analysis')}>
             <div className="grammar-drawer-header">
               <h4>GRAMMAR</h4>
               <PixelButton variant="ghost" size="sm" onClick={closeGrammarDrawer}>
