@@ -1,13 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
 import { parseASS, getSubtitleFormat } from '../../utils/assParser';
 import { parseSRT, parseVTT, getActiveCue } from '../../utils/subtitleParser';
 import { pickSubtitleFile, saveSubtitleFile } from '../../utils/subtitleSave';
 import { translateText, analyzeGrammar, transcribeWithWhisper } from '../../utils/aiService';
+import { lookupDictionary, type DictionaryTooltipResult } from '../../utils/dictionary';
 import { seekTo, safePlay, safePause } from '../../utils/mediaControl';
 import { getEnglishText } from '../../utils/bilingualText';
-import { ConfirmDialog, PixelButton, PixelPanel, PixelBadge, PixelTextarea } from '../PixelUI';
+import {
+  ConfirmDialog,
+  PixelButton,
+  PixelPanel,
+  PixelBadge,
+  PixelInput,
+  PixelTextarea,
+} from '../PixelUI';
 import type { FavoriteType, SubtitleCue } from '../../types';
 
 export function SubtitlePanel() {
@@ -17,12 +25,20 @@ export function SubtitlePanel() {
   const mediaRef = useMediaRef();
   const [editingCueId, setEditingCueId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [editingCueStart, setEditingCueStart] = useState<number | null>(null);
+  const [editingCueEnd, setEditingCueEnd] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [actionsCueId, setActionsCueId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     null | 'transcribe' | 'translateAll' | 'overwriteImport'
   >(null);
+  const [dictionaryQuery, setDictionaryQuery] = useState('');
+  const [dictionaryResult, setDictionaryResult] = useState<DictionaryTooltipResult | null>(null);
+  const [dictionaryLoading, setDictionaryLoading] = useState(false);
+  const [dictionaryError, setDictionaryError] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const pendingImportRef = useRef<{ file: File; handle: FileSystemFileHandle | null } | null>(
     null
   );
@@ -34,6 +50,7 @@ export function SubtitlePanel() {
     setSubtitles,
     setSubtitleFile,
     updateCueText,
+    updateCueTiming,
     panelSubtitlesVisible,
     togglePanelSubtitles,
     selectedCueId,
@@ -60,6 +77,8 @@ export function SubtitlePanel() {
     currentTime,
     setCurrentTime,
     setIsPlaying,
+    recentSubtitleFiles,
+    addRecentSubtitleFile,
   } = useAppStore();
 
   const activeCue = getActiveCue(subtitles, currentTime);
@@ -102,6 +121,7 @@ export function SubtitlePanel() {
         fileHandle: handle,
         assPreamble: preamble,
       });
+      addRecentSubtitleFile({ name: file.name, format: 'ass', fileHandle: handle });
       return;
     }
 
@@ -116,6 +136,7 @@ export function SubtitlePanel() {
       format,
       fileHandle: handle,
     });
+    addRecentSubtitleFile({ name: file.name, format, fileHandle: handle });
   };
 
   const loadSubtitle = async (file: File, handle: FileSystemFileHandle | null = null) => {
@@ -125,6 +146,45 @@ export function SubtitlePanel() {
       return;
     }
     await applySubtitleFile(file, handle);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!tooltipRef.current) return;
+      if (event.target instanceof Node && !tooltipRef.current.contains(event.target)) {
+        setTooltipPosition(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const openDictionaryTooltip = async (
+    cue: SubtitleCue,
+    event: ReactMouseEvent<HTMLElement>
+  ) => {
+    event.stopPropagation();
+    const selection = window.getSelection()?.toString().trim() ?? '';
+    const query = selection.length > 1 ? selection : cue.text;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const parentRect = listRef.current?.getBoundingClientRect();
+    const top = parentRect ? rect.top - parentRect.top + rect.height + 12 : rect.bottom + 12;
+    const left = parentRect ? rect.left - parentRect.left + 12 : rect.left + 12;
+
+    setTooltipPosition({ top, left });
+    setDictionaryQuery(query);
+    setDictionaryLoading(true);
+    setDictionaryError(null);
+    setDictionaryResult(null);
+
+    try {
+      const result = await lookupDictionary(query, openaiApiKey || undefined);
+      setDictionaryResult(result);
+    } catch {
+      setDictionaryError('Lookup failed. Try selecting a single word or phrase.');
+    } finally {
+      setDictionaryLoading(false);
+    }
   };
 
   const handleImportClick = async () => {
@@ -137,6 +197,24 @@ export function SubtitlePanel() {
     fileRef.current?.click();
   };
 
+  const loadRecentSubtitleFile = async (item: {
+    name: string;
+    format: 'srt' | 'vtt' | 'ass' | 'none';
+    fileHandle?: FileSystemFileHandle | null;
+  }) => {
+    if (!item.fileHandle) {
+      alert('No file handle available for this recent subtitle file. Re-import it manually.');
+      return;
+    }
+    try {
+      const file = await item.fileHandle.getFile();
+      if (!file) throw new Error('Unable to access subtitle file.');
+      await applySubtitleFile(file, item.fileHandle);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to restore recent subtitle.');
+    }
+  };
+
   const handleSave = async () => {
     if (!subtitleFile || subtitles.length === 0) return;
     setIsSaving(true);
@@ -147,26 +225,6 @@ export function SubtitlePanel() {
     if (!result.success && result.message !== 'Save cancelled') {
       alert(result.message);
     }
-  };
-
-  const startEdit = (cue: SubtitleCue) => {
-    setEditingCueId(cue.id);
-    setEditText(cue.text);
-    setSelectedCueId(cue.id);
-    setActionsCueId(cue.id);
-  };
-
-  const commitEdit = () => {
-    if (editingCueId) {
-      updateCueText(editingCueId, editText.trim());
-      setEditingCueId(null);
-      setEditText('');
-    }
-  };
-
-  const cancelEdit = () => {
-    setEditingCueId(null);
-    setEditText('');
   };
 
   const runAITranscribe = async () => {
@@ -326,6 +384,45 @@ export function SubtitlePanel() {
     setIsPlaying(ok);
   };
 
+  const startEdit = (cue: SubtitleCue) => {
+    setEditingCueId(cue.id);
+    setEditText(cue.text);
+    setEditingCueStart(cue.start);
+    setEditingCueEnd(cue.end);
+    setSelectedCueId(cue.id);
+    setActionsCueId(cue.id);
+  };
+
+  const commitEdit = () => {
+    if (!editingCueId) return;
+    const trimmed = editText.trim();
+    if (trimmed !== '') {
+      updateCueText(editingCueId, trimmed);
+    }
+    if (
+      editingCueStart != null &&
+      editingCueEnd != null &&
+      editingCueEnd >= editingCueStart
+    ) {
+      updateCueTiming(editingCueId, editingCueStart, editingCueEnd);
+    }
+    if (editingCueEnd != null && editingCueStart != null && editingCueEnd < editingCueStart) {
+      alert('End time must be after start time.');
+      return;
+    }
+    setEditingCueId(null);
+    setEditText('');
+    setEditingCueStart(null);
+    setEditingCueEnd(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingCueId(null);
+    setEditText('');
+    setEditingCueStart(null);
+    setEditingCueEnd(null);
+  };
+
   const handleConfirm = async () => {
     const action = confirmAction;
     setConfirmAction(null);
@@ -443,6 +540,24 @@ export function SubtitlePanel() {
           </PixelButton>
         )}
       </div>
+      {recentSubtitleFiles.length > 0 && (
+        <div className="recent-subtitle-list">
+          <span className="recent-subtitle-label">RECENT SUBTITLES</span>
+          <div className="recent-subtitle-items">
+            {recentSubtitleFiles.map((item) => (
+              <button
+                key={item.name}
+                type="button"
+                className="recent-subtitle-item"
+                onClick={() => void loadRecentSubtitleFile(item)}
+                disabled={!item.fileHandle}
+              >
+                {item.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {subtitleFile && (
         <p className="subtitle-file-info">
@@ -496,6 +611,28 @@ export function SubtitlePanel() {
                             }
                           }}
                         />
+                        <div className="cue-time-edit-row">
+                          <label>
+                            Start
+                            <PixelInput
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editingCueStart ?? ''}
+                              onChange={(e) => setEditingCueStart(Number(e.target.value) || 0)}
+                            />
+                          </label>
+                          <label>
+                            End
+                            <PixelInput
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editingCueEnd ?? ''}
+                              onChange={(e) => setEditingCueEnd(Number(e.target.value) || 0)}
+                            />
+                          </label>
+                        </div>
                         <div className="cue-edit-actions">
                           <PixelButton variant="accent" size="sm" onClick={commitEdit}>
                             ✓ OK
@@ -508,10 +645,20 @@ export function SubtitlePanel() {
                     ) : (
                       <>
                         {/* EN on top */}
-                        <p className="cue-text">{cue.text}</p>
+                        <p
+                          className="cue-text"
+                          onClick={(e) => void openDictionaryTooltip(cue, e)}
+                          title="Click to look up this line or selected text"
+                        >
+                          {cue.text}
+                        </p>
                         {/* Translation below only after Translate */}
                         {(cue.translation || cue.nativeTranslation) && !cue.translationHidden && (
-                          <p className="cue-translation">
+                          <p
+                            className="cue-translation"
+                            onClick={(e) => void openDictionaryTooltip(cue, e)}
+                            title="Click to look up this translation or selected text"
+                          >
                             {cue.translation ?? cue.nativeTranslation}
                           </p>
                         )}
@@ -572,6 +719,52 @@ export function SubtitlePanel() {
                 );
               })
             )}
+          </div>
+        )}
+
+        {tooltipPosition && (
+          <div
+            ref={tooltipRef}
+            className="dictionary-tooltip"
+            style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
+          >
+            <div className="dictionary-tooltip-header">
+              <span>LOOKUP</span>
+              <strong>{dictionaryQuery}</strong>
+            </div>
+            {dictionaryLoading ? (
+              <p className="dictionary-tooltip-loading">Searching...</p>
+            ) : dictionaryError ? (
+              <p className="dictionary-tooltip-error">{dictionaryError}</p>
+            ) : (
+              <div className="dictionary-tooltip-body">
+                <div className="dictionary-tooltip-section">
+                  <h5>English</h5>
+                  {(dictionaryResult?.english || []).map((section) => (
+                    <div key={section.title}>
+                      <strong>{section.title}</strong>
+                      {section.items.map((item, index) => (
+                        <p key={index}>{item}</p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="dictionary-tooltip-section">
+                  <h5>Chinese</h5>
+                  {(dictionaryResult?.chinese || []).map((section) => (
+                    <div key={section.title}>
+                      <strong>{section.title}</strong>
+                      {section.items.map((item, index) => (
+                        <p key={index}>{item}</p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="dictionary-tooltip-hint">
+              Select a word or phrase before clicking for best results.
+            </p>
           </div>
         )}
 

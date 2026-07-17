@@ -33,6 +33,7 @@ export interface AnkiCartItem {
   cueIds: string[];
   text: string;
   translation?: string;
+  nativeTranslation?: string;
   start: number;
   end: number;
   addedAt: number;
@@ -76,6 +77,22 @@ export interface MediaFile {
   type: 'video' | 'audio';
   mimeType: string;
   file: File;
+  fileHandle?: FileSystemFileHandle | null;
+}
+
+export interface RecentMediaItem {
+  name: string;
+  type: 'video' | 'audio';
+  mimeType: string;
+  fileHandle?: FileSystemFileHandle | null;
+  timestamp: number;
+}
+
+export interface RecentSubtitleItem {
+  name: string;
+  format: SubtitleFormat;
+  fileHandle?: FileSystemFileHandle | null;
+  timestamp: number;
 }
 
 export interface GrammarAnalysis {

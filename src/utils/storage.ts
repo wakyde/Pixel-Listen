@@ -1,5 +1,5 @@
 const DB_NAME = 'pixel-listen-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,6 +19,15 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains('typingResults')) {
         db.createObjectStore('typingResults', { keyPath: 'cueId' });
+      }
+      if (!db.objectStoreNames.contains('session')) {
+        db.createObjectStore('session', { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains('recentMedia')) {
+        db.createObjectStore('recentMedia', { keyPath: 'name' });
+      }
+      if (!db.objectStoreNames.contains('recentSubtitles')) {
+        db.createObjectStore('recentSubtitles', { keyPath: 'name' });
       }
     };
   });
@@ -42,6 +51,15 @@ export async function saveToStore<T extends { id: string }>(storeName: string, i
   const store = await getStore(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.put(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function saveStoreItem<T>(storeName: string, item: T): Promise<void> {
+  const store = await getStore(storeName, 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put(item as any);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
@@ -72,6 +90,36 @@ export async function setSetting<T>(key: string, value: T): Promise<void> {
   const store = await getStore('settings', 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.put({ key, value });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function loadSessionValue<T>(key: string): Promise<T | null> {
+  const store = await getStore('session');
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => {
+      const row = req.result as { key: string; value: T } | undefined;
+      resolve(row?.value ?? null);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function saveSessionValue<T>(key: string, value: T): Promise<void> {
+  const store = await getStore('session', 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.put({ key, value });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deleteSessionValue(key: string): Promise<void> {
+  const store = await getStore('session', 'readwrite');
+  return new Promise((resolve, reject) => {
+    const req = store.delete(key);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });

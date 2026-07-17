@@ -131,8 +131,10 @@ export function AnkiExportPanel() {
                     />
                   </label>
                   <div className="anki-cart-body">
-                    {item.translation && (
-                      <p className="anki-cart-front">{item.translation}</p>
+                    {(item.translation || item.nativeTranslation) && (
+                      <p className="anki-cart-front">
+                        {item.translation ?? item.nativeTranslation}
+                      </p>
                     )}
                     <p className="anki-cart-back">{item.text}</p>
                     <span className="anki-cart-time">

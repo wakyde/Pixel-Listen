@@ -6,6 +6,8 @@ import type {
   GrammarAnalysis,
   MediaFile,
   PracticeMode,
+  RecentMediaItem,
+  RecentSubtitleItem,
   SubtitleCue,
   SubtitleFile,
   VideoSubtitleMode,
@@ -39,6 +41,9 @@ interface AppState {
 
   ankiCart: AnkiCartItem[];
 
+  recentMedia: RecentMediaItem[];
+  recentSubtitleFiles: RecentSubtitleItem[];
+
   openaiApiKey: string;
   targetLanguage: string;
   /** File System Access API directory handle for Anki's media collection folder */
@@ -51,7 +56,13 @@ interface AppState {
   setMedia: (media: MediaFile | null) => void;
   setSubtitles: (cues: SubtitleCue[]) => void;
   setSubtitleFile: (file: SubtitleFile | null) => void;
+  addRecentMedia: (item: Omit<RecentMediaItem, 'timestamp'>) => void;
+  addRecentSubtitleFile: (item: Omit<RecentSubtitleItem, 'timestamp'>) => void;
+  setRecentMedia: (items: RecentMediaItem[]) => void;
+  setRecentSubtitleFiles: (items: RecentSubtitleItem[]) => void;
   updateCueText: (id: string, text: string) => void;
+  updateCueTiming: (id: string, start: number, end: number) => void;
+  setPanelSubtitlesVisible: (visible: boolean) => void;
   togglePanelSubtitles: () => void;
   setVideoSubtitleMode: (mode: VideoSubtitleMode) => void;
   setCurrentTime: (t: number) => void;
@@ -118,6 +129,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   ankiCart: [],
 
+  recentMedia: [],
+  recentSubtitleFiles: [],
+
   openaiApiKey: '',
   targetLanguage: 'Chinese',
   ankiMediaDirHandle: null,
@@ -148,12 +162,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       grammarDrawerOpen: false,
     }),
   setSubtitleFile: (file) => set({ subtitleFile: file }),
+  addRecentMedia: (item) =>
+    set((s) => {
+      const filtered = s.recentMedia.filter((media) => media.name !== item.name);
+      return {
+        recentMedia: [{ ...item, timestamp: Date.now() }, ...filtered].slice(0, 10),
+      };
+    }),
+  addRecentSubtitleFile: (item) =>
+    set((s) => {
+      const filtered = s.recentSubtitleFiles.filter((file) => file.name !== item.name);
+      return {
+        recentSubtitleFiles: [{ ...item, timestamp: Date.now() }, ...filtered].slice(0, 10),
+      };
+    }),
+  setRecentMedia: (items) => set({ recentMedia: items }),
+  setRecentSubtitleFiles: (items) => set({ recentSubtitleFiles: items }),
   updateCueText: (id, text) =>
     set((s) => ({
       subtitles: s.subtitles.map((c) =>
         c.id === id ? { ...c, text, rawAssText: undefined } : c
       ),
     })),
+  updateCueTiming: (id, start, end) =>
+    set((s) => ({
+      subtitles: [...s.subtitles]
+        .map((c) => (c.id === id ? { ...c, start, end } : c))
+        .sort((a, b) => a.start - b.start || a.end - b.end),
+    })),
+  setPanelSubtitlesVisible: (visible) => set({ panelSubtitlesVisible: visible }),
   togglePanelSubtitles: () =>
     set((s) => ({ panelSubtitlesVisible: !s.panelSubtitlesVisible })),
   setVideoSubtitleMode: (mode) => set({ videoSubtitleMode: mode }),
@@ -251,7 +288,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: crypto.randomUUID(),
       cueIds: g.ids,
       text: g.text,
-      translation: g.translation ?? g.nativeTranslation,
+      translation: g.translation,
+      nativeTranslation: g.nativeTranslation,
       start: g.start,
       end: g.end,
       addedAt: Date.now(),
@@ -276,10 +314,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: crypto.randomUUID(),
       cueIds,
       text: selected.map((item) => item.text.trim()).filter(Boolean).join(' '),
-      translation: selected
-        .map((item) => item.translation?.trim())
-        .filter((text): text is string => Boolean(text))
-        .join(' ') || undefined,
+      translation: (() => {
+        const parts = selected
+          .map((item) => item.translation?.trim())
+          .filter((text): text is string => typeof text === 'string' && text.length > 0);
+        return parts.length > 0 ? parts.join(' ') : undefined;
+      })(),
+      nativeTranslation: (() => {
+        const parts = selected
+          .map((item) => item.nativeTranslation?.trim())
+          .filter((text): text is string => typeof text === 'string' && text.length > 0);
+        return parts.length > 0 ? parts.join(' ') : undefined;
+      })(),
       start: Math.min(...selected.map((item) => item.start)),
       end: Math.max(...selected.map((item) => item.end)),
       addedAt: Date.now(),

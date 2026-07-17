@@ -273,10 +273,17 @@ function downloadBlob(blob: Blob, filename: string) {
 
 /** Front = translation (or EN if missing), Back = original English */
 export function buildCartCards(
-  items: { text: string; translation?: string; start?: number; end?: number }[]
+  items: {
+    text: string;
+    translation?: string;
+    nativeTranslation?: string;
+    start?: number;
+    end?: number;
+  }[]
 ): AnkiCard[] {
   return items.map((item) => ({
-    front: item.translation?.trim() || item.text,
+    front:
+      item.translation?.trim() || item.nativeTranslation?.trim() || item.text,
     back: item.text,
     audioStart: item.start,
     audioEnd: item.end,

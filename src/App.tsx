@@ -9,8 +9,16 @@ import { TypingMode } from './components/PracticeModes/TypingMode';
 import { RecordingMode } from './components/PracticeModes/RecordingMode';
 import { AnkiExportPanel } from './components/AnkiExport/AnkiExportPanel';
 import { SettingsPanel } from './components/Settings/SettingsPanel';
-import { loadFromStore, saveToStore } from './utils/storage';
-import type { ABLoopSegment, FavoriteItem } from './types';
+import { loadFromStore, saveToStore, loadSessionValue, saveSessionValue, deleteSessionValue } from './utils/storage';
+import type {
+  ABLoopSegment,
+  FavoriteItem,
+  MediaFile,
+  RecentMediaItem,
+  RecentSubtitleItem,
+  SubtitleCue,
+  SubtitleFile,
+} from './types';
 import './styles/globals.css';
 
 type Tab = 'subtitles' | 'favorites' | 'anki' | 'settings';
@@ -105,9 +113,23 @@ function AppContent() {
     setABHistory,
     setOpenaiApiKey,
     setTargetLanguage,
+    setMedia,
+    setSubtitleFile,
+    setSubtitles,
+    setPanelSubtitlesVisible,
+    setCurrentTime,
+    panelSubtitlesVisible,
+    media,
+    subtitleFile,
+    subtitles,
+    currentTime,
     abHistory,
     favorites,
     ankiCart,
+    recentMedia,
+    recentSubtitleFiles,
+    setRecentMedia,
+    setRecentSubtitleFiles,
   } = useAppStore();
 
   const [sideTab, setSideTab] = useState<Tab>('subtitles');
@@ -119,7 +141,53 @@ function AppContent() {
     const lang = localStorage.getItem('pixel-listen-target-lang');
     if (key) setOpenaiApiKey(key);
     if (lang) setTargetLanguage(lang);
-  }, [setFavorites, setABHistory, setOpenaiApiKey, setTargetLanguage]);
+
+    (async () => {
+      const sessionMedia = await loadSessionValue<MediaFile>('session-media');
+      const sessionSubtitleFile = await loadSessionValue<SubtitleFile>('session-subtitle-file');
+      const sessionSubtitles = await loadSessionValue<SubtitleCue[]>('session-subtitles');
+      const sessionCurrentTime = await loadSessionValue<number>('session-current-time');
+      const sessionPanelVisible = await loadSessionValue<boolean>('session-panel-visible');
+      const sessionRecentMedia = await loadSessionValue<RecentMediaItem[]>('recent-media');
+      const sessionRecentSubs = await loadSessionValue<RecentSubtitleItem[]>('recent-subtitles');
+
+      if (sessionMedia) {
+        let file: File | undefined = sessionMedia.file;
+        if (!file && sessionMedia.fileHandle) {
+          try {
+            file = await sessionMedia.fileHandle.getFile();
+          } catch {
+            // File handle not accessible anymore
+          }
+        }
+        if (file) {
+          setMedia({
+            ...sessionMedia,
+            file,
+            url: URL.createObjectURL(file),
+          });
+        }
+      }
+      if (sessionSubtitleFile) {
+        setSubtitleFile(sessionSubtitleFile);
+      }
+      if (sessionSubtitles) {
+        setSubtitles(sessionSubtitles);
+      }
+      if (typeof sessionCurrentTime === 'number' && sessionCurrentTime >= 0) {
+        setCurrentTime(sessionCurrentTime);
+      }
+      if (typeof sessionPanelVisible === 'boolean') {
+        setPanelSubtitlesVisible(sessionPanelVisible);
+      }
+      if (sessionRecentMedia) {
+        setRecentMedia(sessionRecentMedia);
+      }
+      if (sessionRecentSubs) {
+        setRecentSubtitleFiles(sessionRecentSubs);
+      }
+    })();
+  }, [setFavorites, setABHistory, setOpenaiApiKey, setTargetLanguage, setMedia, setSubtitleFile, setSubtitles, setCurrentTime, setPanelSubtitlesVisible, setRecentMedia, setRecentSubtitleFiles]);
 
   useEffect(() => {
     favorites.forEach((f) => saveToStore('favorites', f));
@@ -128,6 +196,40 @@ function AppContent() {
   useEffect(() => {
     abHistory.forEach((s) => saveToStore('abHistory', s));
   }, [abHistory]);
+
+  useEffect(() => {
+    if (media) {
+      saveSessionValue('session-media', media);
+    } else {
+      deleteSessionValue('session-media');
+    }
+  }, [media]);
+
+  useEffect(() => {
+    if (subtitleFile) saveSessionValue('session-subtitle-file', subtitleFile);
+    else deleteSessionValue('session-subtitle-file');
+  }, [subtitleFile]);
+
+  useEffect(() => {
+    if (subtitles.length > 0) saveSessionValue('session-subtitles', subtitles);
+    else deleteSessionValue('session-subtitles');
+  }, [subtitles]);
+
+  useEffect(() => {
+    saveSessionValue('recent-media', recentMedia);
+  }, [recentMedia]);
+
+  useEffect(() => {
+    saveSessionValue('recent-subtitles', recentSubtitleFiles);
+  }, [recentSubtitleFiles]);
+
+  useEffect(() => {
+    saveSessionValue('session-current-time', currentTime);
+  }, [currentTime]);
+
+  useEffect(() => {
+    saveSessionValue('session-panel-visible', panelSubtitlesVisible);
+  }, [panelSubtitlesVisible]);
 
   return (
     <div className="app">

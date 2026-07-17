@@ -29,6 +29,8 @@ export function MediaPlayer() {
     setSubtitles,
     setSubtitleFile,
     setSelectedCueId,
+    recentMedia,
+    addRecentMedia,
   } = useAppStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,16 +95,61 @@ export function MediaPlayer() {
       setSubtitles([]);
       setSubtitleFile(null);
 
+      const newMedia = {
+        name: file.name,
+        url: URL.createObjectURL(file),
+        type: (isVideo ? 'video' : 'audio') as 'video' | 'audio',
+        mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
+        file,
+      };
+      setMedia(newMedia);
+      addRecentMedia({
+        name: file.name,
+        type: isVideo ? 'video' : 'audio',
+        mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
+        fileHandle: undefined,
+      });
+    },
+    [setMedia, setSubtitles, setSubtitleFile, addRecentMedia]
+  );
+
+  const loadRecentMedia = async (item: { name: string; type: 'video' | 'audio'; mimeType: string; fileHandle?: FileSystemFileHandle | null; }) => {
+    if (!item.fileHandle) {
+      alert('No file handle available for this recent media item. Re-import the file manually.');
+      return;
+    }
+
+    try {
+      const file = await item.fileHandle.getFile();
+      if (!file) throw new Error('Unable to access media file.');
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      const isVideo = ['mp4', 'mkv', 'webm'].includes(ext);
+      const isAudio = ['mp3', 'm4a', 'wav', 'ogg'].includes(ext);
+      if (!isVideo && !isAudio) throw new Error('Unsupported media file type.');
+
+      const prev = useAppStore.getState().media;
+      if (prev) URL.revokeObjectURL(prev.url);
+
+      setSubtitles([]);
+      setSubtitleFile(null);
       setMedia({
         name: file.name,
         url: URL.createObjectURL(file),
         type: isVideo ? 'video' : 'audio',
         mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
         file,
+        fileHandle: item.fileHandle,
       });
-    },
-    [setMedia, setSubtitles, setSubtitleFile]
-  );
+      addRecentMedia({
+        name: file.name,
+        type: isVideo ? 'video' : 'audio',
+        mimeType: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'),
+        fileHandle: item.fileHandle,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to restore recent media.');
+    }
+  };
 
   useEffect(() => {
     const el = mediaRef.current;
@@ -176,6 +223,27 @@ export function MediaPlayer() {
               }}
             />
           </label>
+          {recentMedia.length > 0 && (
+            <div className="recent-media-section">
+              <span className="recent-media-label">RECENT MEDIA</span>
+              <div className="recent-media-list">
+                {recentMedia.map((item) => (
+                  <button
+                    key={item.name}
+                    type="button"
+                    className="recent-media-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void loadRecentMedia(item);
+                    }}
+                    disabled={!item.fileHandle}
+                  >
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -233,6 +301,8 @@ export function MediaPlayer() {
           </PixelButton>
         </div>
       )}
+
+      <div className="tv-stand" aria-hidden="true" />
 
       {showOverlay && activeCue && (
         <div className="subtitle-overlay" aria-live="polite">
