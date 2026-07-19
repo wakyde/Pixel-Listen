@@ -195,8 +195,8 @@ export async function exportAnkiDeck(
         }
       }
     }
-    const front = escapeField(card.front);
-    const back = escapeField(card.back) + (mediaTags ? `<br>${mediaTags.trim()}` : '');
+    const front = escapeField(card.front) + (card.mediaOnFront && mediaTags ? `<br>${mediaTags.trim()}` : '');
+    const back = escapeField(card.back) + (!card.mediaOnFront && mediaTags ? `<br>${mediaTags.trim()}` : '');
     const tags = card.tags.join(' ');
     noteLines.push(`${front}\t${back}\t${tags}`);
   }
@@ -346,7 +346,7 @@ export function buildMultiFormatCards(
 
       case 'listening_review':
         // 听力复习: Front=media, Back=English+translation
-        front = '[AUDIO]'; // Placeholder for audio/video
+        front = '';
         back = item.text;
         if (baseTranslation) {
           back += `<br><br><em>${baseTranslation}</em>`;
@@ -366,7 +366,7 @@ export function buildMultiFormatCards(
         break;
     }
 
-    if (front && back) {
+    if (front || back) {
       cards.push({
         front,
         back,
@@ -374,6 +374,7 @@ export function buildMultiFormatCards(
         audioEnd: item.end,
         tags,
         mode: 'cart' as const,
+        mediaOnFront: fmt.format === 'listening_review',
       });
     }
   }

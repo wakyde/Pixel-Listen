@@ -82,8 +82,10 @@ function testMultipleFormatsExport(): void {
 
   if (colloquialCard!.front !== item.translation)
     error('Colloquial front should be translation');
-  if (!listeningCard!.front.includes('[AUDIO]'))
-    error('Listening card front should have [AUDIO]');
+  if (listeningCard!.front !== '')
+    error('Listening card front should be empty (media tags added on export)');
+  if (listeningCard!.mediaOnFront !== true)
+    error('Listening card should have mediaOnFront=true');
   if (!listeningCard!.back.includes(item.text))
     error('Listening card back should have English text');
 

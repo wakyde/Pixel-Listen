@@ -51,9 +51,10 @@ function testListeningReviewFormat(): void {
   const cards = buildMultiFormatCards(item);
   assert(cards.length === 1, 'Listening review format should generate 1 card');
   assert(
-    cards[0].front === '[AUDIO]',
-    'Listening review front should be [AUDIO] placeholder'
+    cards[0].front === '',
+    'Listening review front should be empty (media tags added on export)'
   );
+  assert(cards[0].mediaOnFront === true, 'Listening review card should have mediaOnFront=true');
   assert(cards[0].back.includes('This is a test sentence.'), 'Back should contain English');
   assert(
     cards[0].back.includes('This is a translation.'),

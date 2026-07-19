@@ -173,11 +173,11 @@ export function SubtitlePanel() {
     const top = parentRect ? rect.top - parentRect.top + rect.height + 12 : rect.bottom + 12;
     const left = parentRect ? rect.left - parentRect.left + 12 : rect.left + 12;
 
-    setTooltipPosition({ top, left });
-    setDictionaryQuery(query);
-    setDictionaryLoading(true);
-    setDictionaryError(null);
-    setDictionaryResult(null);
+    // setTooltipPosition({ top, left });
+    // setDictionaryQuery(query);
+    // setDictionaryLoading(true);
+    // setDictionaryError(null);
+    // setDictionaryResult(null);
 
     try {
       const result = await lookupDictionary(query, openaiApiKey || undefined);

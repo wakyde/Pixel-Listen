@@ -132,6 +132,8 @@ export interface AnkiCard {
   audioEnd?: number;
   tags: string[];
   mode: 'custom' | 'ai' | 'cart';
+  /** When true, media tags go on the front side (e.g. listening_review cards) */
+  mediaOnFront?: boolean;
 }
 
 export type PracticeMode = 'listen' | 'typing' | 'recording';
