@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useMediaRef } from '../../context/MediaContext';
 import { useI18n } from '../../context/I18nContext';
@@ -6,7 +6,6 @@ import { parseASS, getSubtitleFormat } from '../../utils/assParser';
 import { parseSRT, parseVTT, getActiveCue } from '../../utils/subtitleParser';
 import { pickSubtitleFile, saveSubtitleFile } from '../../utils/subtitleSave';
 import { translateText, analyzeGrammar, transcribeWithWhisper } from '../../utils/aiService';
-import { lookupDictionary, type DictionaryTooltipResult } from '../../utils/dictionary';
 import { seekTo, safePlay, safePause } from '../../utils/mediaControl';
 import { getEnglishText } from '../../utils/bilingualText';
 import {
@@ -36,12 +35,6 @@ export function SubtitlePanel() {
   const [confirmAction, setConfirmAction] = useState<
     null | 'transcribe' | 'translateAll' | 'overwriteImport'
   >(null);
-  const [dictionaryQuery, setDictionaryQuery] = useState('');
-  const [dictionaryResult, setDictionaryResult] = useState<DictionaryTooltipResult | null>(null);
-  const [dictionaryLoading, setDictionaryLoading] = useState(false);
-  const [dictionaryError, setDictionaryError] = useState<string | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
   const pendingImportRef = useRef<{ file: File; handle: FileSystemFileHandle | null } | null>(
     null
   );
@@ -82,13 +75,23 @@ export function SubtitlePanel() {
     setIsPlaying,
     recentSubtitleFiles,
     addRecentSubtitleFile,
+    abLoopActive,
+    pointA,
+    pointB,
+    leadTime,
   } = useAppStore();
 
   const activeCue = getActiveCue(subtitles, currentTime);
   const activeCueId = activeCue?.id ?? null;
 
+  const abFilteredSubtitles = useMemo(() =>
+    abLoopActive && pointA != null && pointB != null
+      ? subtitles.filter((cue) => cue.start < pointB && cue.end > pointA)
+      : subtitles
+  , [abLoopActive, pointA, pointB, subtitles]);
+
   const filteredSubtitles = searchQuery.trim()
-    ? subtitles.filter((cue) => {
+    ? abFilteredSubtitles.filter((cue) => {
         const q = searchQuery.toLowerCase();
         return (
           cue.text.toLowerCase().includes(q) ||
@@ -96,7 +99,7 @@ export function SubtitlePanel() {
           (cue.nativeTranslation && cue.nativeTranslation.toLowerCase().includes(q))
         );
       })
-    : subtitles;
+    : abFilteredSubtitles;
 
   useEffect(() => {
     if (!activeCueId || editingCueId) return;
@@ -160,45 +163,6 @@ export function SubtitlePanel() {
       return;
     }
     await applySubtitleFile(file, handle);
-  };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (!tooltipRef.current) return;
-      if (event.target instanceof Node && !tooltipRef.current.contains(event.target)) {
-        setTooltipPosition(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const openDictionaryTooltip = async (
-    cue: SubtitleCue,
-    event: ReactMouseEvent<HTMLElement>
-  ) => {
-    event.stopPropagation();
-    const selection = window.getSelection()?.toString().trim() ?? '';
-    const query = selection.length > 1 ? selection : cue.text;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const parentRect = listRef.current?.getBoundingClientRect();
-    const top = parentRect ? rect.top - parentRect.top + rect.height + 12 : rect.bottom + 12;
-    const left = parentRect ? rect.left - parentRect.left + 12 : rect.left + 12;
-
-    // setTooltipPosition({ top, left });
-    // setDictionaryQuery(query);
-    // setDictionaryLoading(true);
-    // setDictionaryError(null);
-    // setDictionaryResult(null);
-
-    try {
-      const result = await lookupDictionary(query, openaiApiKey || undefined);
-      setDictionaryResult(result);
-    } catch {
-      setDictionaryError(t('subs.lookup_failed'));
-    } finally {
-      setDictionaryLoading(false);
-    }
   };
 
   const handleImportClick = async () => {
@@ -392,7 +356,8 @@ export function SubtitlePanel() {
     if (editingCueId) return;
     setSelectedCueId(cue.id);
     setActionsCueId(cue.id);
-    const t = seekTo(mediaRef.current, cue.start);
+    const seekTarget = Math.max(0, cue.start - leadTime / 1000);
+    const t = seekTo(mediaRef.current, seekTarget);
     setCurrentTime(t);
     const ok = await safePlay(mediaRef.current);
     setIsPlaying(ok);
@@ -699,21 +664,11 @@ export function SubtitlePanel() {
                       </div>
                     ) : (
                       <>
-                        {/* EN on top */}
-                        <p
-                          className="cue-text"
-                          onClick={(e) => void openDictionaryTooltip(cue, e)}
-                          title={t('subs.lookup_title')}
-                        >
+                        <p className="cue-text">
                           {highlightMatch(cue.text)}
                         </p>
-                        {/* Translation below only after Translate */}
                         {(cue.translation || cue.nativeTranslation) && !cue.translationHidden && (
-                          <p
-                            className="cue-translation"
-                            onClick={(e) => void openDictionaryTooltip(cue, e)}
-                            title={t('subs.lookup_trans_title')}
-                          >
+                          <p className="cue-translation">
                             {highlightMatch(cue.translation ?? cue.nativeTranslation ?? '')}
                           </p>
                         )}
@@ -774,52 +729,6 @@ export function SubtitlePanel() {
                 );
               })
             )}
-          </div>
-        )}
-
-        {tooltipPosition && (
-          <div
-            ref={tooltipRef}
-            className="dictionary-tooltip"
-            style={{ top: tooltipPosition.top, left: tooltipPosition.left }}
-          >
-            <div className="dictionary-tooltip-header">
-              <span>LOOKUP</span>
-              <strong>{dictionaryQuery}</strong>
-            </div>
-            {dictionaryLoading ? (
-              <p className="dictionary-tooltip-loading">Searching...</p>
-            ) : dictionaryError ? (
-              <p className="dictionary-tooltip-error">{dictionaryError}</p>
-            ) : (
-              <div className="dictionary-tooltip-body">
-                <div className="dictionary-tooltip-section">
-                  <h5>English</h5>
-                  {(dictionaryResult?.english || []).map((section) => (
-                    <div key={section.title}>
-                      <strong>{section.title}</strong>
-                      {section.items.map((item, index) => (
-                        <p key={index}>{item}</p>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-                <div className="dictionary-tooltip-section">
-                  <h5>Chinese</h5>
-                  {(dictionaryResult?.chinese || []).map((section) => (
-                    <div key={section.title}>
-                      <strong>{section.title}</strong>
-                      {section.items.map((item, index) => (
-                        <p key={index}>{item}</p>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            <p className="dictionary-tooltip-hint">
-              Select a word or phrase before clicking for best results.
-            </p>
           </div>
         )}
 

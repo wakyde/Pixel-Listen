@@ -78,21 +78,81 @@ function PlaybackRateSync() {
 
 function ABLoopHandler() {
   const mediaRef = useMediaRef();
-  const { abLoopActive, pointA, pointB, media, isPlaying } = useAppStore();
+  const { abLoopActive, pointA, pointB, media, isPlaying, skipSilent, subtitles } = useAppStore();
 
   useEffect(() => {
     const el = mediaRef.current;
     if (!el || !media || !abLoopActive || pointA == null || pointB == null) return;
 
     let raf = 0;
+    let seeking = false;
+
     const check = () => {
+      if (skipSilent && subtitles.length > 0) {
+        const t = el.currentTime;
+        const inCue = subtitles.some((c) => t >= c.start && t < c.end);
+        if (!inCue && t >= pointA && t < pointB) {
+          const nextCue = subtitles
+            .filter((c) => c.start > t && c.start < pointB)
+            .sort((a, b) => a.start - b.start)[0];
+          if (nextCue) {
+            seeking = true;
+            el.currentTime = nextCue.start;
+          } else {
+            seeking = true;
+            el.currentTime = pointA;
+          }
+        }
+      }
       if (el.currentTime >= pointB - 0.02) {
+        seeking = true;
         el.currentTime = pointA;
       }
       if (!el.paused) {
         raf = requestAnimationFrame(check);
+      } else if (seeking) {
+        seeking = false;
+        el.play().catch(() => {});
+        raf = requestAnimationFrame(check);
       }
     };
+
+    const onSeeked = () => {
+      seeking = false;
+    };
+
+    const onPlay = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(check);
+    };
+
+    const onTimeUpdate = () => {
+      if (el.paused && !seeking) return;
+      if (el.currentTime >= pointB - 0.02) {
+        seeking = true;
+        el.currentTime = pointA;
+      }
+      if (skipSilent && subtitles.length > 0) {
+        const t = el.currentTime;
+        const inCue = subtitles.some((c) => t >= c.start && t < c.end);
+        if (!inCue && t >= pointA && t < pointB) {
+          const nextCue = subtitles
+            .filter((c) => c.start > t && c.start < pointB)
+            .sort((a, b) => a.start - b.start)[0];
+          if (nextCue) {
+            seeking = true;
+            el.currentTime = nextCue.start;
+          } else {
+            seeking = true;
+            el.currentTime = pointA;
+          }
+        }
+      }
+    };
+
+    el.addEventListener('seeked', onSeeked);
+    el.addEventListener('play', onPlay);
+    el.addEventListener('timeupdate', onTimeUpdate);
 
     if (isPlaying) {
       raf = requestAnimationFrame(check);
@@ -100,8 +160,11 @@ function ABLoopHandler() {
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
+      el.removeEventListener('seeked', onSeeked);
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('timeupdate', onTimeUpdate);
     };
-  }, [abLoopActive, pointA, pointB, media, mediaRef, isPlaying]);
+  }, [abLoopActive, pointA, pointB, media, mediaRef, isPlaying, skipSilent, subtitles]);
 
   return null;
 }

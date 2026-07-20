@@ -34,6 +34,8 @@ interface AppState {
   pointB: number | null;
   abLoopActive: boolean;
   abHistory: ABLoopSegment[];
+  skipSilent: boolean;
+  leadTime: number;
 
   selectedCueId: string | null;
   grammarAnalysis: GrammarAnalysis | null;
@@ -79,6 +81,8 @@ interface AppState {
   saveABSegment: (label?: string) => void;
   loadABSegment: (seg: ABLoopSegment) => void;
   setABHistory: (history: ABLoopSegment[]) => void;
+  toggleSkipSilent: () => void;
+  setLeadTime: (ms: number) => void;
 
   setSelectedCueId: (id: string | null) => void;
   updateCueTranslation: (id: string, translation: string) => void;
@@ -125,6 +129,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   pointB: null,
   abLoopActive: false,
   abHistory: [],
+  skipSilent: false,
+  leadTime: 0,
 
   selectedCueId: null,
   grammarAnalysis: null,
@@ -160,13 +166,25 @@ export const useAppStore = create<AppState>((set, get) => ({
       grammarDrawerOpen: false,
       ...(media === null ? { subtitles: [], subtitleFile: null, ankiCart: [] } : {}),
     }),
-  setSubtitles: (cues) =>
+  setSubtitles: (cues) => {
+    const sorted = [...cues].sort((a, b) => a.start - b.start || a.end - b.end);
+    if (sorted.length > 0) {
+      for (let i = 0; i < sorted.length; i++) {
+        const prevEnd = i > 0 ? sorted[i - 1].end : 0;
+        const gap = sorted[i].start - prevEnd;
+        if (gap > 0.05 && gap < 2) {
+          const lead = Math.min(gap * 0.5, 0.3);
+          sorted[i] = { ...sorted[i], start: Math.max(prevEnd, sorted[i].start - lead) };
+        }
+      }
+    }
     set({
-      subtitles: [...cues].sort((a, b) => a.start - b.start || a.end - b.end),
+      subtitles: sorted,
       selectedCueId: null,
       grammarAnalysis: null,
       grammarDrawerOpen: false,
-    }),
+    });
+  },
   setSubtitleFile: (file) => set({ subtitleFile: file }),
   addRecentMedia: (item) =>
     set((s) => {
@@ -242,6 +260,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentTime: seg.pointA,
     }),
   setABHistory: (history) => set({ abHistory: history }),
+  toggleSkipSilent: () => set((s) => ({ skipSilent: !s.skipSilent })),
+  setLeadTime: (ms) => set({ leadTime: ms }),
 
   setSelectedCueId: (id) => set({ selectedCueId: id }),
   updateCueTranslation: (id, translation) =>

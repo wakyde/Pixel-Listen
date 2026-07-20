@@ -27,6 +27,7 @@ export function MediaPlayer() {
     pointB,
     abLoopActive,
     practiceMode,
+    leadTime,
     setSubtitles,
     setSubtitleFile,
     setSelectedCueId,
@@ -42,22 +43,27 @@ export function MediaPlayer() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (practiceMode !== 'listen') return;
       const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
       if (!subtitles || subtitles.length === 0) return;
 
-      // determine current active index
-      let idx = activeCue ? subtitles.findIndex((c) => c.id === activeCue.id) : -1;
+      const navSubtitles = abLoopActive && pointA != null && pointB != null
+        ? subtitles.filter((c) => c.start < pointB && c.end > pointA)
+        : subtitles;
+      if (navSubtitles.length === 0) return;
+
+      let idx = activeCue ? navSubtitles.findIndex((c) => c.id === activeCue.id) : -1;
       if (idx === -1) {
-        // fallback: find the first cue that starts after currentTime
-        idx = subtitles.findIndex((c) => c.start > currentTime) - 1;
+        idx = navSubtitles.findIndex((c) => c.start > currentTime) - 1;
       }
 
       const goToIndex = async (newIdx: number) => {
-        if (newIdx < 0 || newIdx >= subtitles.length) return;
-        const cue = subtitles[newIdx];
+        if (newIdx < 0 || newIdx >= navSubtitles.length) return;
+        const cue = navSubtitles[newIdx];
         setSelectedCueId(cue.id);
-        const t = seekTo(mediaRef.current, cue.start);
+        const seekTarget = Math.max(0, cue.start - leadTime / 1000);
+        const t = seekTo(mediaRef.current, seekTarget);
         setCurrentTime(t);
         const ok = await safePlay(mediaRef.current);
         setIsPlaying(ok);
@@ -69,14 +75,14 @@ export function MediaPlayer() {
         void goToIndex(newIdx);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        const newIdx = idx < 0 ? 0 : Math.min(subtitles.length - 1, idx + 1);
+        const newIdx = idx < 0 ? 0 : Math.min(navSubtitles.length - 1, idx + 1);
         void goToIndex(newIdx);
       }
     };
 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [subtitles, currentTime, activeCue, setCurrentTime, setIsPlaying, setSelectedCueId]);
+  }, [subtitles, currentTime, activeCue, abLoopActive, pointA, pointB, practiceMode, setCurrentTime, setIsPlaying, setSelectedCueId]);
 
   useEffect(() => {
     const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
@@ -284,7 +290,10 @@ export function MediaPlayer() {
     },
   };
 
-  const showOverlay = practiceMode === 'listen' && videoSubtitleMode !== 'off' && activeCue;
+  const abLoopCueVisible =
+    !abLoopActive || pointA == null || pointB == null ||
+    (activeCue != null && activeCue.start < pointB && activeCue.end > pointA);
+  const showOverlay = practiceMode === 'listen' && videoSubtitleMode !== 'off' && activeCue && abLoopCueVisible;
   const translation = activeCue?.translationHidden
     ? undefined
     : activeCue?.translation ?? activeCue?.nativeTranslation;

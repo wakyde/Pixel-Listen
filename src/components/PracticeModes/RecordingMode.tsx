@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useI18n } from '../../context/I18nContext';
 import { useMediaRef } from '../../context/MediaContext';
 import { getEnglishText } from '../../utils/bilingualText';
-import { getActiveCueIndex } from '../../utils/subtitleParser';
 import { safePlay, safePause, seekTo } from '../../utils/mediaControl';
 import { scoreShadowRecording } from '../../utils/audioScore';
 import { playSuccessSound } from '../../utils/soundEffects';
@@ -22,7 +21,7 @@ interface Recording {
 export function RecordingMode() {
   const { t } = useI18n();
   const mediaRef = useMediaRef();
-  const { media, subtitles, currentTime, setCurrentTime, setIsPlaying } = useAppStore();
+  const { media, subtitles, currentTime, setCurrentTime, setIsPlaying, abLoopActive, pointA, pointB, leadTime } = useAppStore();
   const [cueIndex, setCueIndex] = useState(0);
   const [phase, setPhase] = useState<'idle' | 'recording' | 'scoring'>('idle');
   const [isPlayingOriginal, setIsPlayingOriginal] = useState(false);
@@ -35,19 +34,34 @@ export function RecordingMode() {
   const stopAtRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const cue = subtitles[cueIndex];
+  const abFilteredSubtitles = useMemo(() =>
+    abLoopActive && pointA != null && pointB != null
+      ? subtitles.filter((cue) => cue.start < pointB && cue.end > pointA)
+      : subtitles
+  , [abLoopActive, pointA, pointB, subtitles]);
+  const safeCueIndex = Math.min(cueIndex, Math.max(0, abFilteredSubtitles.length - 1));
+  const cue = abFilteredSubtitles[safeCueIndex];
   const english = cue ? getEnglishText(cue.text) : '';
 
   useEffect(() => {
+    if (safeCueIndex !== cueIndex && abFilteredSubtitles.length > 0) {
+      setCueIndex(safeCueIndex);
+    }
+  }, [safeCueIndex, cueIndex, abFilteredSubtitles.length]);
+
+  useEffect(() => {
     if (phase === 'recording' || phase === 'scoring') return;
-    const idx = getActiveCueIndex(subtitles, currentTime);
-    if (idx >= 0 && idx !== cueIndex) {
-      setCueIndex(idx);
-      if (phase === 'idle' && !isPlayingOriginal) {
-        setLastScore(null);
+    const activeCue = abFilteredSubtitles.find((c) => currentTime >= c.start && currentTime < c.end);
+    if (activeCue) {
+      const idx = abFilteredSubtitles.indexOf(activeCue);
+      if (idx >= 0 && idx !== cueIndex) {
+        setCueIndex(idx);
+        if (phase === 'idle' && !isPlayingOriginal) {
+          setLastScore(null);
+        }
       }
     }
-  }, [currentTime, subtitles, phase, isPlayingOriginal, cueIndex]);
+  }, [currentTime, abFilteredSubtitles, phase, isPlayingOriginal, cueIndex]);
 
   useEffect(() => {
     const end = stopAtRef.current;
@@ -57,11 +71,11 @@ export function RecordingMode() {
       setIsPlaying(false);
       setIsPlayingOriginal(false);
       stopAtRef.current = null;
-      if (cueIndex < subtitles.length - 1) {
+      if (cueIndex < abFilteredSubtitles.length - 1) {
         setCueIndex(cueIndex + 1);
       }
     }
-  }, [currentTime, mediaRef, setIsPlaying, cueIndex, subtitles.length]);
+  }, [currentTime, mediaRef, setIsPlaying, cueIndex, abFilteredSubtitles.length]);
 
   useEffect(() => {
     return () => {
@@ -69,25 +83,81 @@ export function RecordingMode() {
     };
   }, []);
 
-  const playOriginal = async () => {
+  const abFilteredRef = useRef(abFilteredSubtitles);
+  abFilteredRef.current = abFilteredSubtitles;
+
+  const playOriginal = useCallback(async () => {
     if (!cue) return;
     stopAtRef.current = cue.end;
     setIsPlayingOriginal(true);
-    const t = seekTo(mediaRef.current, cue.start);
+    const seekTarget = Math.max(0, cue.start - leadTime / 1000);
+    const t = seekTo(mediaRef.current, seekTarget);
     setCurrentTime(t);
     const ok = await safePlay(mediaRef.current);
     setIsPlaying(ok);
     if (!ok) {
       setIsPlayingOriginal(false);
     }
-  };
+  }, [cue, leadTime, mediaRef, setCurrentTime, setIsPlaying]);
 
-  const stopOriginal = () => {
+  const stopOriginal = useCallback(() => {
     stopAtRef.current = null;
     safePause(mediaRef.current);
     setIsPlaying(false);
     setIsPlayingOriginal(false);
-  };
+  }, [mediaRef, setIsPlaying]);
+
+  const togglePlayPause = useCallback(async () => {
+    if (!cue || phase === 'recording' || phase === 'scoring') return;
+    const el = mediaRef.current;
+    if (!el) return;
+    if (el.paused) {
+      stopAtRef.current = cue.end;
+      setIsPlayingOriginal(true);
+      const seekTarget = Math.max(0, cue.start - leadTime / 1000);
+      const t = seekTo(el, seekTarget);
+      setCurrentTime(t);
+      const ok = await safePlay(el);
+      setIsPlaying(ok);
+      if (!ok) setIsPlayingOriginal(false);
+    } else {
+      stopOriginal();
+    }
+  }, [cue, phase, leadTime, mediaRef, setCurrentTime, setIsPlaying, stopOriginal]);
+
+  const goTo = useCallback((delta: number) => {
+    const len = abFilteredRef.current.length;
+    const next = cueIndex + delta;
+    if (next < 0 || next >= len) return;
+    setCueIndex(next);
+    setLastScore(null);
+  }, [cueIndex]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === ' ') {
+        e.preventDefault();
+        void togglePlayPause();
+        return;
+      }
+      if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        if (phase !== 'recording' && phase !== 'scoring') {
+          goTo(e.key === 'ArrowLeft' ? -1 : 1);
+        }
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
+        if (phase === 'recording' || phase === 'scoring') return;
+        e.preventDefault();
+        goTo(e.key === 'ArrowLeft' ? -1 : 1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [togglePlayPause, goTo, phase]);
 
   const startRecording = async () => {
     if (!cue) return;
@@ -161,7 +231,7 @@ export function RecordingMode() {
     setPendingClear(false);
   };
 
-  if (subtitles.length === 0) {
+  if (abFilteredSubtitles.length === 0) {
     return (
       <PixelPanel title={t('recording.title')}>
         <p className="empty-hint">{t('recording.empty_hint')}</p>
@@ -197,17 +267,14 @@ export function RecordingMode() {
 
         <div className="recording-header">
           <span className="cue-counter">
-            {cueIndex + 1} / {subtitles.length}
+            {cueIndex + 1} / {abFilteredSubtitles.length}
           </span>
           <div className="recording-nav">
             <PixelButton
               variant="ghost"
               size="sm"
               disabled={cueIndex === 0 || phase === 'scoring'}
-              onClick={() => {
-                setCueIndex((i) => i - 1);
-                setLastScore(null);
-              }}
+              onClick={() => goTo(-1)}
             >
               ◀
             </PixelButton>
@@ -228,11 +295,8 @@ export function RecordingMode() {
             <PixelButton
               variant="ghost"
               size="sm"
-              disabled={cueIndex >= subtitles.length - 1 || phase === 'scoring'}
-              onClick={() => {
-                setCueIndex((i) => i + 1);
-                setLastScore(null);
-              }}
+              disabled={cueIndex >= abFilteredSubtitles.length - 1 || phase === 'scoring'}
+              onClick={() => goTo(1)}
             >
               ▶
             </PixelButton>

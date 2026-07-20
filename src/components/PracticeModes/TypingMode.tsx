@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { useI18n } from '../../context/I18nContext';
 import { useMediaRef } from '../../context/MediaContext';
@@ -32,7 +32,7 @@ function calcAccuracy(expected: string, typed: string): number {
 export function TypingMode() {
   const { t } = useI18n();
   const mediaRef = useMediaRef();
-  const { subtitles, currentTime, setCurrentTime, setIsPlaying } = useAppStore();
+  const { subtitles, currentTime, setCurrentTime, setIsPlaying, abLoopActive, pointA, pointB, leadTime } = useAppStore();
   const [cueIndex, setCueIndex] = useState(0);
   const [input, setInput] = useState('');
   const [result, setResult] = useState<{ accuracy: number; shown: boolean; perfect: boolean } | null>(
@@ -43,16 +43,28 @@ export function TypingMode() {
   const inputRef = useRef<HTMLInputElement>(null);
   const stopAtRef = useRef<number | null>(null);
 
-  const cue = subtitles[cueIndex];
+  const abFilteredSubtitles = useMemo(() =>
+    abLoopActive && pointA != null && pointB != null
+      ? subtitles.filter((cue) => cue.start < pointB && cue.end > pointA)
+      : subtitles
+  , [abLoopActive, pointA, pointB, subtitles]);
+  const safeCueIndex = Math.min(cueIndex, Math.max(0, abFilteredSubtitles.length - 1));
+  const cue = abFilteredSubtitles[safeCueIndex];
   const english = cue ? getEnglishText(cue.text) : '';
   const activeCue = getActiveCue(subtitles, currentTime);
 
   useEffect(() => {
-    if (activeCue && subtitles.length > 0 && !autoPlayPending) {
-      const idx = subtitles.findIndex((c) => c.id === activeCue.id);
+    if (safeCueIndex !== cueIndex && abFilteredSubtitles.length > 0) {
+      setCueIndex(safeCueIndex);
+    }
+  }, [safeCueIndex, cueIndex, abFilteredSubtitles.length]);
+
+  useEffect(() => {
+    if (activeCue && abFilteredSubtitles.length > 0 && !autoPlayPending) {
+      const idx = abFilteredSubtitles.findIndex((c) => c.id === activeCue.id);
       if (idx >= 0 && idx !== cueIndex) setCueIndex(idx);
     }
-  }, [activeCue, subtitles, cueIndex, autoPlayPending]);
+  }, [activeCue, abFilteredSubtitles, cueIndex, autoPlayPending]);
 
   useEffect(() => {
     const end = stopAtRef.current;
@@ -64,11 +76,15 @@ export function TypingMode() {
     }
   }, [currentTime, mediaRef, setIsPlaying]);
 
-  const playCueAt = async (index: number) => {
-    const target = subtitles[index];
+  const abFilteredRef = useRef(abFilteredSubtitles);
+  abFilteredRef.current = abFilteredSubtitles;
+
+  const playCueAt = useCallback(async (index: number) => {
+    const target = abFilteredRef.current[index];
     if (!target) return;
     stopAtRef.current = target.end;
-    const t = seekTo(mediaRef.current, target.start);
+    const seekTarget = Math.max(0, target.start - leadTime / 1000);
+    const t = seekTo(mediaRef.current, seekTarget);
     setCurrentTime(t);
     const ok = await safePlay(mediaRef.current);
     setIsPlaying(ok);
@@ -76,18 +92,68 @@ export function TypingMode() {
     setResult(null);
     setShowBurst(false);
     inputRef.current?.focus();
-  };
+  }, [leadTime, mediaRef, setCurrentTime, setIsPlaying]);
 
   useEffect(() => {
     if (!autoPlayPending) return;
     setAutoPlayPending(false);
     void playCueAt(cueIndex);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cueIndex, autoPlayPending]);
+  }, [cueIndex, autoPlayPending, playCueAt]);
 
   const playCue = () => {
     void playCueAt(cueIndex);
   };
+
+  const togglePlayPause = useCallback(async () => {
+    const el = mediaRef.current;
+    if (!el || !cue) return;
+    if (el.paused) {
+      stopAtRef.current = cue.end;
+      const seekTarget = Math.max(0, cue.start - leadTime / 1000);
+      const t = seekTo(el, seekTarget);
+      setCurrentTime(t);
+      const ok = await safePlay(el);
+      setIsPlaying(ok);
+    } else {
+      safePause(el);
+      setIsPlaying(false);
+      stopAtRef.current = null;
+    }
+  }, [mediaRef, cue, leadTime, setCurrentTime, setIsPlaying]);
+
+  const goTo = useCallback((delta: number) => {
+    const len = abFilteredRef.current.length;
+    const next = cueIndex + delta;
+    if (next < 0 || next >= len) return;
+    setCueIndex(next);
+    setInput('');
+    setResult(null);
+    setShowBurst(false);
+    setAutoPlayPending(true);
+  }, [cueIndex]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === ' ') {
+        e.preventDefault();
+        void togglePlayPause();
+        return;
+      }
+      if (e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        goTo(e.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || (e.target as HTMLElement)?.isContentEditable) return;
+        e.preventDefault();
+        goTo(e.key === 'ArrowLeft' ? -1 : 1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [togglePlayPause, goTo]);
 
   const checkAnswer = () => {
     if (!cue) return;
@@ -104,17 +170,7 @@ export function TypingMode() {
     }
   };
 
-  const goTo = (delta: number) => {
-    const next = cueIndex + delta;
-    if (next < 0 || next >= subtitles.length) return;
-    setInput('');
-    setResult(null);
-    setShowBurst(false);
-    setAutoPlayPending(true);
-    setCueIndex(next);
-  };
-
-  if (subtitles.length === 0) {
+  if (abFilteredSubtitles.length === 0) {
     return (
       <PixelPanel title={t('panel.typing_mode')}>
         <p className="empty-hint">{t('typing.empty_hint')}</p>
@@ -128,7 +184,7 @@ export function TypingMode() {
         {showBurst && <div className="success-fx" aria-hidden>✨ {t('typing.perfect')} ✨</div>}
         <div className="typing-header">
           <span className="cue-counter">
-            {cueIndex + 1} / {subtitles.length}
+            {cueIndex + 1} / {abFilteredSubtitles.length}
           </span>
           <PixelButton variant="secondary" size="sm" onClick={playCue}>
              {t('typing.replay')}
@@ -173,7 +229,7 @@ export function TypingMode() {
             variant="ghost"
             size="sm"
             onClick={() => goTo(1)}
-            disabled={cueIndex >= subtitles.length - 1}
+            disabled={cueIndex >= abFilteredSubtitles.length - 1}
           >
             {t('typing.next')} →
           </PixelButton>

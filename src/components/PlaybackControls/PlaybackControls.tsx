@@ -31,6 +31,10 @@ export function PlaybackControls() {
     saveABSegment,
     abHistory,
     loadABSegment,
+    skipSilent,
+    toggleSkipSilent,
+    leadTime,
+    setLeadTime,
   } = useAppStore();
 
   const seek = (time: number) => {
@@ -199,6 +203,15 @@ export function PlaybackControls() {
           >
             {t('playback.save')}
           </PixelButton>
+          <PixelButton
+            variant={skipSilent ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={toggleSkipSilent}
+            disabled={!abLoopActive}
+            title={t('playback.skip_silent_title')}
+          >
+            {skipSilent ? t('playback.skip_silent_on') : t('playback.skip_silent')}
+          </PixelButton>
         </div>
 
         {abHistory.length > 0 && (
@@ -218,6 +231,23 @@ export function PlaybackControls() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="subtitle-calibration-section">
+        <div className="calibration-controls">
+          <span className="control-label">{t('playback.lead_time')}</span>
+          <input
+            type="range"
+            className="pixel-range lead-time-range"
+            min={0}
+            max={500}
+            step={10}
+            value={leadTime}
+            onChange={(e) => setLeadTime(Number(e.target.value))}
+            aria-label={t('playback.lead_time')}
+          />
+          <span className="lead-time-value">{leadTime}ms</span>
+        </div>
       </div>
     </div>
   );
