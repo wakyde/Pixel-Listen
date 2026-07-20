@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from './store/appStore';
 import { useI18n } from './context/I18nContext';
 import { MediaProvider, useMediaRef } from './context/MediaContext';
@@ -164,6 +164,8 @@ function AppContent() {
     document.body.style.userSelect = 'none';
   };
 
+  const sessionRestoredRef = useRef(false);
+
   useEffect(() => {
     loadFromStore<FavoriteItem>('favorites').then(setFavorites);
     loadFromStore<ABLoopSegment>('abHistory').then(setABHistory);
@@ -216,6 +218,8 @@ function AppContent() {
       if (sessionRecentSubs) {
         setRecentSubtitleFiles(sessionRecentSubs);
       }
+
+      sessionRestoredRef.current = true;
     })();
   }, [setFavorites, setABHistory, setOpenaiApiKey, setTargetLanguage, setMedia, setSubtitleFile, setSubtitles, setCurrentTime, setPanelSubtitlesVisible, setRecentMedia, setRecentSubtitleFiles]);
 
@@ -228,37 +232,44 @@ function AppContent() {
   }, [abHistory]);
 
   useEffect(() => {
+    if (!sessionRestoredRef.current) return;
     if (media) {
-      saveSessionValue('session-media', media);
+      saveSessionValue('session-media', media).catch(() => {});
     } else {
-      deleteSessionValue('session-media');
+      deleteSessionValue('session-media').catch(() => {});
     }
   }, [media]);
 
   useEffect(() => {
-    if (subtitleFile) saveSessionValue('session-subtitle-file', subtitleFile);
-    else deleteSessionValue('session-subtitle-file');
+    if (!sessionRestoredRef.current) return;
+    if (subtitleFile) saveSessionValue('session-subtitle-file', subtitleFile).catch(() => {});
+    else deleteSessionValue('session-subtitle-file').catch(() => {});
   }, [subtitleFile]);
 
   useEffect(() => {
-    if (subtitles.length > 0) saveSessionValue('session-subtitles', subtitles);
-    else deleteSessionValue('session-subtitles');
+    if (!sessionRestoredRef.current) return;
+    if (subtitles.length > 0) saveSessionValue('session-subtitles', subtitles).catch(() => {});
+    else deleteSessionValue('session-subtitles').catch(() => {});
   }, [subtitles]);
 
   useEffect(() => {
-    saveSessionValue('recent-media', recentMedia);
+    if (!sessionRestoredRef.current) return;
+    saveSessionValue('recent-media', recentMedia).catch(() => {});
   }, [recentMedia]);
 
   useEffect(() => {
-    saveSessionValue('recent-subtitles', recentSubtitleFiles);
+    if (!sessionRestoredRef.current) return;
+    saveSessionValue('recent-subtitles', recentSubtitleFiles).catch(() => {});
   }, [recentSubtitleFiles]);
 
   useEffect(() => {
-    saveSessionValue('session-current-time', currentTime);
+    if (!sessionRestoredRef.current) return;
+    saveSessionValue('session-current-time', currentTime).catch(() => {});
   }, [currentTime]);
 
   useEffect(() => {
-    saveSessionValue('session-panel-visible', panelSubtitlesVisible);
+    if (!sessionRestoredRef.current) return;
+    saveSessionValue('session-panel-visible', panelSubtitlesVisible).catch(() => {});
   }, [panelSubtitlesVisible]);
 
   return (

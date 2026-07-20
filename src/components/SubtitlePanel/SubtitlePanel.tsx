@@ -31,6 +31,7 @@ export function SubtitlePanel() {
   const [editingCueEnd, setEditingCueEnd] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [actionsCueId, setActionsCueId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<
     null | 'transcribe' | 'translateAll' | 'overwriteImport'
@@ -85,6 +86,17 @@ export function SubtitlePanel() {
 
   const activeCue = getActiveCue(subtitles, currentTime);
   const activeCueId = activeCue?.id ?? null;
+
+  const filteredSubtitles = searchQuery.trim()
+    ? subtitles.filter((cue) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          cue.text.toLowerCase().includes(q) ||
+          (cue.translation && cue.translation.toLowerCase().includes(q)) ||
+          (cue.nativeTranslation && cue.nativeTranslation.toLowerCase().includes(q))
+        );
+      })
+    : subtitles;
 
   useEffect(() => {
     if (!activeCueId || editingCueId) return;
@@ -442,6 +454,20 @@ export function SubtitlePanel() {
   const inCart = (cueId: string) =>
     ankiCart.some((item) => item.cueIds.includes(cueId));
 
+  const highlightMatch = (text: string) => {
+    const q = searchQuery.trim();
+    if (!q) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark className="search-highlight">{text.slice(idx, idx + q.length)}</mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  };
+
   const toggleAnkiCue = (cueId: string) => {
     const item = ankiCart.find((cartItem) => cartItem.cueIds.includes(cueId));
     if (item) {
@@ -570,6 +596,33 @@ export function SubtitlePanel() {
       )}
       {saveMessage && <p className="save-message">{saveMessage}</p>}
 
+      {subtitles.length > 0 && panelSubtitlesVisible && (
+        <div className="subtitle-search">
+          <PixelInput
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t('subs.search_placeholder')}
+            className="subtitle-search-input"
+          />
+          {searchQuery.trim() && (
+            <span className="subtitle-search-count">
+              {filteredSubtitles.length}/{subtitles.length}
+            </span>
+          )}
+          {searchQuery.trim() && (
+            <PixelButton
+              variant="ghost"
+              size="sm"
+              onClick={() => setSearchQuery('')}
+              className="subtitle-search-clear"
+            >
+              ✕
+            </PixelButton>
+          )}
+        </div>
+      )}
+
       <div className="subtitle-list-wrap">
         {!panelSubtitlesVisible ? (
           <p className="empty-hint">{t('subs.panel_hidden_hint')}</p>
@@ -578,7 +631,7 @@ export function SubtitlePanel() {
             {subtitles.length === 0 ? (
               <p className="empty-hint">{t('subs.import_hint')}</p>
             ) : (
-              subtitles.map((cue) => {
+              filteredSubtitles.map((cue) => {
                 const isActive = activeCueId === cue.id;
                 const isSelected = selectedCueId === cue.id;
                 const showActions = actionsCueId === cue.id || isSelected;
@@ -652,7 +705,7 @@ export function SubtitlePanel() {
                           onClick={(e) => void openDictionaryTooltip(cue, e)}
                           title={t('subs.lookup_title')}
                         >
-                          {cue.text}
+                          {highlightMatch(cue.text)}
                         </p>
                         {/* Translation below only after Translate */}
                         {(cue.translation || cue.nativeTranslation) && !cue.translationHidden && (
@@ -661,7 +714,7 @@ export function SubtitlePanel() {
                             onClick={(e) => void openDictionaryTooltip(cue, e)}
                             title={t('subs.lookup_trans_title')}
                           >
-                            {cue.translation ?? cue.nativeTranslation}
+                            {highlightMatch(cue.translation ?? cue.nativeTranslation ?? '')}
                           </p>
                         )}
                       </>

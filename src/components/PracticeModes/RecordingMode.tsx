@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/appStore';
 import { useI18n } from '../../context/I18nContext';
 import { useMediaRef } from '../../context/MediaContext';
 import { getEnglishText } from '../../utils/bilingualText';
+import { getActiveCueIndex } from '../../utils/subtitleParser';
 import { safePlay, safePause, seekTo } from '../../utils/mediaControl';
 import { scoreShadowRecording } from '../../utils/audioScore';
 import { playSuccessSound } from '../../utils/soundEffects';
@@ -23,7 +24,8 @@ export function RecordingMode() {
   const mediaRef = useMediaRef();
   const { media, subtitles, currentTime, setCurrentTime, setIsPlaying } = useAppStore();
   const [cueIndex, setCueIndex] = useState(0);
-  const [phase, setPhase] = useState<'idle' | 'playing' | 'recording' | 'scoring'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'recording' | 'scoring'>('idle');
+  const [isPlayingOriginal, setIsPlayingOriginal] = useState(false);
   const [recordings, setRecordings] = useState<Recording[]>([]);
   const [pendingClear, setPendingClear] = useState(false);
   const [showBurst, setShowBurst] = useState(false);
@@ -31,28 +33,35 @@ export function RecordingMode() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const stopAtRef = useRef<number | null>(null);
-  const awaitingRecordRef = useRef(false);
   const streamRef = useRef<MediaStream | null>(null);
 
   const cue = subtitles[cueIndex];
   const english = cue ? getEnglishText(cue.text) : '';
 
-  // Stop original playback at cue end; then start mic recording if waiting
+  useEffect(() => {
+    if (phase === 'recording' || phase === 'scoring') return;
+    const idx = getActiveCueIndex(subtitles, currentTime);
+    if (idx >= 0 && idx !== cueIndex) {
+      setCueIndex(idx);
+      if (phase === 'idle' && !isPlayingOriginal) {
+        setLastScore(null);
+      }
+    }
+  }, [currentTime, subtitles, phase, isPlayingOriginal, cueIndex]);
+
   useEffect(() => {
     const end = stopAtRef.current;
     if (end == null) return;
     if (currentTime >= end - 0.05) {
       safePause(mediaRef.current);
       setIsPlaying(false);
+      setIsPlayingOriginal(false);
       stopAtRef.current = null;
-      if (awaitingRecordRef.current) {
-        awaitingRecordRef.current = false;
-        void beginMicCapture();
-      } else if (phase === 'playing') {
-        setPhase('idle');
+      if (cueIndex < subtitles.length - 1) {
+        setCueIndex(cueIndex + 1);
       }
     }
-  }, [currentTime, mediaRef, setIsPlaying, phase]);
+  }, [currentTime, mediaRef, setIsPlaying, cueIndex, subtitles.length]);
 
   useEffect(() => {
     return () => {
@@ -63,31 +72,45 @@ export function RecordingMode() {
   const playOriginal = async () => {
     if (!cue) return;
     stopAtRef.current = cue.end;
-    awaitingRecordRef.current = false;
-    setPhase('playing');
+    setIsPlayingOriginal(true);
     const t = seekTo(mediaRef.current, cue.start);
     setCurrentTime(t);
     const ok = await safePlay(mediaRef.current);
     setIsPlaying(ok);
+    if (!ok) {
+      setIsPlayingOriginal(false);
+    }
   };
 
-  const beginMicCapture = async () => {
-    const stream = streamRef.current;
-    if (!stream) {
+  const stopOriginal = () => {
+    stopAtRef.current = null;
+    safePause(mediaRef.current);
+    setIsPlaying(false);
+    setIsPlayingOriginal(false);
+  };
+
+  const startRecording = async () => {
+    if (!cue) return;
+    setLastScore(null);
+    setShowBurst(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        void finalizeRecording();
+      };
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setPhase('recording');
+    } catch {
+      alert(t('recording.mic_denied'));
       setPhase('idle');
-      return;
     }
-    const recorder = new MediaRecorder(stream);
-    chunksRef.current = [];
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-    recorder.onstop = () => {
-      void finalizeRecording();
-    };
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-    setPhase('recording');
   };
 
   const finalizeRecording = async () => {
@@ -122,35 +145,7 @@ export function RecordingMode() {
     }
   };
 
-  const startShadowing = async () => {
-    if (!cue) return;
-    setLastScore(null);
-    setShowBurst(false);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      // Play original first; recording starts after cue ends
-      awaitingRecordRef.current = true;
-      stopAtRef.current = cue.end;
-      setPhase('playing');
-      const t = seekTo(mediaRef.current, cue.start);
-      setCurrentTime(t);
-      const ok = await safePlay(mediaRef.current);
-      setIsPlaying(ok);
-      if (!ok) {
-        // If play fails, start recording immediately
-        awaitingRecordRef.current = false;
-        await beginMicCapture();
-      }
-    } catch {
-      alert(t('recording.mic_denied'));
-      setPhase('idle');
-    }
-  };
-
   const stopRecording = () => {
-    awaitingRecordRef.current = false;
-    stopAtRef.current = null;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     } else {
@@ -158,8 +153,6 @@ export function RecordingMode() {
       streamRef.current = null;
       setPhase('idle');
     }
-    safePause(mediaRef.current);
-    setIsPlaying(false);
   };
 
   const clearRecordings = () => {
@@ -177,13 +170,11 @@ export function RecordingMode() {
   }
 
   const phaseLabel =
-    phase === 'playing'
-      ? t('recording.phase_playing')
-      : phase === 'recording'
-        ? t('recording.phase_recording')
-        : phase === 'scoring'
-          ? t('recording.phase_scoring')
-          : null;
+    phase === 'recording'
+      ? t('recording.phase_recording')
+      : phase === 'scoring'
+        ? t('recording.phase_scoring')
+        : null;
 
   return (
     <PixelPanel title={t('recording.title')}>
@@ -212,7 +203,7 @@ export function RecordingMode() {
             <PixelButton
               variant="ghost"
               size="sm"
-              disabled={cueIndex === 0 || phase !== 'idle'}
+              disabled={cueIndex === 0 || phase === 'scoring'}
               onClick={() => {
                 setCueIndex((i) => i - 1);
                 setLastScore(null);
@@ -223,15 +214,21 @@ export function RecordingMode() {
             <PixelButton
               variant="secondary"
               size="sm"
-              onClick={() => void playOriginal()}
-              disabled={phase !== 'idle'}
+              onClick={() => {
+                if (isPlayingOriginal) {
+                  stopOriginal();
+                } else {
+                  void playOriginal();
+                }
+              }}
+              disabled={phase === 'scoring'}
             >
-              {t('recording.original')}
+              {isPlayingOriginal ? t('recording.stop_original') : t('recording.original')}
             </PixelButton>
             <PixelButton
               variant="ghost"
               size="sm"
-              disabled={cueIndex >= subtitles.length - 1 || phase !== 'idle'}
+              disabled={cueIndex >= subtitles.length - 1 || phase === 'scoring'}
               onClick={() => {
                 setCueIndex((i) => i + 1);
                 setLastScore(null);
@@ -253,10 +250,10 @@ export function RecordingMode() {
           {phase === 'idle' || phase === 'scoring' ? (
             <PixelButton
               variant="accent"
-              onClick={() => void startShadowing()}
+              onClick={() => void startRecording()}
               disabled={phase === 'scoring'}
             >
-              {t('recording.start_shadowing')}
+              {t('recording.start_recording')}
             </PixelButton>
           ) : (
             <PixelButton variant="danger" onClick={stopRecording}>

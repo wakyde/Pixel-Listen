@@ -114,7 +114,11 @@ export function serializeASS(preamble: string, cues: SubtitleCue[]): string {
   for (const cue of cues) {
     if (!cue.assMeta) continue;
     const m = cue.assMeta;
-    const text = cue.rawAssText ?? cue.text.replace(/\n/g, '\\N');
+    let text = cue.rawAssText ?? cue.text.replace(/\n/g, '\\N');
+    const trans = cue.translation ?? cue.nativeTranslation;
+    if (!cue.rawAssText && trans) {
+      text = `${text}\\N${trans.replace(/\n/g, '\\N')}`;
+    }
     lines.push(
       `Dialogue: ${m.layer},${formatAssTime(cue.start)},${formatAssTime(cue.end)},${m.style},${m.name},${m.marginL},${m.marginR},${m.marginV},${m.effect},${text}`
     );

@@ -89,10 +89,12 @@ export function parseVTT(content: string): SubtitleCue[] {
 
 export function cuesToSRT(cues: SubtitleCue[]): string {
   return cues
-    .map(
-      (cue, i) =>
-        `${i + 1}\n${formatSrtTime(cue.start)} --> ${formatSrtTime(cue.end)}\n${cue.text}`
-    )
+    .map((cue, i) => {
+      const parts = [`${i + 1}`, `${formatSrtTime(cue.start)} --> ${formatSrtTime(cue.end)}`, cue.text];
+      const trans = cue.translation ?? cue.nativeTranslation;
+      if (trans) parts.push(trans);
+      return parts.join('\n');
+    })
     .join('\n\n');
 }
 
