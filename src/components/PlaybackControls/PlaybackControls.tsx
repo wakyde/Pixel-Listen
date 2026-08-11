@@ -207,7 +207,6 @@ export function PlaybackControls() {
             variant={skipSilent ? 'accent' : 'ghost'}
             size="sm"
             onClick={toggleSkipSilent}
-            disabled={!abLoopActive}
             title={t('playback.skip_silent_title')}
           >
             {skipSilent ? t('playback.skip_silent_on') : t('playback.skip_silent')}

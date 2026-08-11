@@ -319,7 +319,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       start: g.start,
       end: g.end,
       addedAt: Date.now(),
-      formats: [{ format: 'colloquial' }], // Default format
+      formats: [{ format: 'listening_review' }], // Default format
     }));
 
     set({ ankiCart: [...items, ...ankiCart] });
@@ -356,7 +356,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       start: Math.min(...selected.map((item) => item.start)),
       end: Math.max(...selected.map((item) => item.end)),
       addedAt: Date.now(),
-      formats: [{ format: 'colloquial' }], // Default format for merged items
+      formats: [{ format: 'listening_review' }], // Default format for merged items
     };
 
     const remaining = ankiCart.filter((item) => !idSet.has(item.id));

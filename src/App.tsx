@@ -82,87 +82,87 @@ function ABLoopHandler() {
 
   useEffect(() => {
     const el = mediaRef.current;
-    if (!el || !media || !abLoopActive || pointA == null || pointB == null) return;
+    if (!el || !media) return;
 
     let raf = 0;
-    let seeking = false;
+    let pendingSeek: number | null = null;
+    let lastCheckTime = 0;
+    const CHECK_INTERVAL = 100; // ms — throttle to avoid excessive checks
 
-    const check = () => {
-      if (skipSilent && subtitles.length > 0) {
-        const t = el.currentTime;
-        const inCue = subtitles.some((c) => t >= c.start && t < c.end);
-        if (!inCue && t >= pointA && t < pointB) {
-          const nextCue = subtitles
-            .filter((c) => c.start > t && c.start < pointB)
-            .sort((a, b) => a.start - b.start)[0];
-          if (nextCue) {
-            seeking = true;
-            el.currentTime = nextCue.start;
-          } else {
-            seeking = true;
-            el.currentTime = pointA;
-          }
+    const findNextCueStart = (t: number, maxTime: number | null): number | null => {
+      for (const c of subtitles) {
+        if (c.start > t && (maxTime === null || c.start < maxTime)) {
+          return c.start;
         }
       }
-      if (el.currentTime >= pointB - 0.02) {
-        seeking = true;
-        el.currentTime = pointA;
+      return null;
+    };
+
+    const isInCue = (t: number): boolean => {
+      for (const c of subtitles) {
+        if (t >= c.start && t < c.end) return true;
       }
-      if (!el.paused) {
-        raf = requestAnimationFrame(check);
-      } else if (seeking) {
-        seeking = false;
-        el.play().catch(() => {});
-        raf = requestAnimationFrame(check);
+      return false;
+    };
+
+    const performSeek = (target: number) => {
+      pendingSeek = target;
+      el.currentTime = target;
+    };
+
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+
+      // Throttle checks
+      if (now - lastCheckTime < CHECK_INTERVAL) return;
+      lastCheckTime = now;
+
+      // If we have a pending seek that hasn't completed yet, wait
+      if (pendingSeek !== null) {
+        if (Math.abs(el.currentTime - pendingSeek) < 0.05) {
+          pendingSeek = null;
+        } else {
+          return; // Still seeking, don't interfere
+        }
+      }
+
+      if (el.paused) return;
+
+      const t = el.currentTime;
+
+      // AB loop boundary check
+      if (abLoopActive && pointA != null && pointB != null && t >= pointB - 0.02) {
+        performSeek(pointA);
+        return;
+      }
+
+      // Skip silent check
+      if (skipSilent && subtitles.length > 0 && !isInCue(t)) {
+        const inLoopRange = abLoopActive && pointA != null && pointB != null && t >= pointA && t < pointB;
+        const maxTime = inLoopRange ? pointB : null;
+        const next = findNextCueStart(t, maxTime);
+
+        if (next !== null) {
+          performSeek(next);
+        } else if (inLoopRange) {
+          performSeek(pointA);
+        }
       }
     };
 
     const onSeeked = () => {
-      seeking = false;
-    };
-
-    const onPlay = () => {
-      if (raf) cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(check);
-    };
-
-    const onTimeUpdate = () => {
-      if (el.paused && !seeking) return;
-      if (el.currentTime >= pointB - 0.02) {
-        seeking = true;
-        el.currentTime = pointA;
-      }
-      if (skipSilent && subtitles.length > 0) {
-        const t = el.currentTime;
-        const inCue = subtitles.some((c) => t >= c.start && t < c.end);
-        if (!inCue && t >= pointA && t < pointB) {
-          const nextCue = subtitles
-            .filter((c) => c.start > t && c.start < pointB)
-            .sort((a, b) => a.start - b.start)[0];
-          if (nextCue) {
-            seeking = true;
-            el.currentTime = nextCue.start;
-          } else {
-            seeking = true;
-            el.currentTime = pointA;
-          }
-        }
-      }
+      pendingSeek = null;
     };
 
     el.addEventListener('seeked', onSeeked);
-    el.addEventListener('play', onPlay);
-    el.addEventListener('timeupdate', onTimeUpdate);
 
     if (isPlaying) {
-      raf = requestAnimationFrame(check);
+      raf = requestAnimationFrame(tick);
     }
 
     return () => {
       if (raf) cancelAnimationFrame(raf);
       el.removeEventListener('seeked', onSeeked);
-      el.removeEventListener('play', onPlay);
-      el.removeEventListener('timeupdate', onTimeUpdate);
     };
   }, [abLoopActive, pointA, pointB, media, mediaRef, isPlaying, skipSilent, subtitles]);
 

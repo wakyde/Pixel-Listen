@@ -36,6 +36,9 @@ export function clearAudioBufferCache(): void {
   audioBufferCache.clear();
 }
 
+const AUDIO_CLIP_PAD_BEFORE = 0.15;
+const AUDIO_CLIP_PAD_AFTER = 0.25;
+
 async function extractAudioClip(
   mediaUrl: string,
   start: number,
@@ -46,10 +49,14 @@ async function extractAudioClip(
     const audioBuffer = await getDecodedAudioBuffer(mediaUrl);
     if (!audioBuffer) return null;
 
+    const duration = audioBuffer.duration;
+    const paddedStart = Math.max(0, start - AUDIO_CLIP_PAD_BEFORE);
+    const paddedEnd = Math.min(duration, end + AUDIO_CLIP_PAD_AFTER);
+    const clipDuration = paddedEnd - paddedStart;
+    if (clipDuration <= 0) return null;
+
     const sampleRate = audioBuffer.sampleRate;
-    const startSample = Math.floor(start * sampleRate);
-    const endSample = Math.min(Math.floor(end * sampleRate), audioBuffer.length);
-    const length = endSample - startSample;
+    const length = Math.ceil(clipDuration * sampleRate);
     if (length <= 0) return null;
 
     const offlineCtx = new OfflineAudioContext(
@@ -60,7 +67,7 @@ async function extractAudioClip(
     const source = offlineCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(offlineCtx.destination);
-    source.start(0, start, end - start);
+    source.start(0, paddedStart, clipDuration);
     const rendered = await offlineCtx.startRendering();
 
     const wav = audioBufferToWav(rendered);
@@ -85,7 +92,10 @@ async function extractVideoClip(
       video.onloadedmetadata = () => resolve();
       video.onerror = () => reject(new Error('video load failed'));
     });
-    video.currentTime = Math.max(0, start);
+
+    const paddedStart = Math.max(0, start - AUDIO_CLIP_PAD_BEFORE);
+    const paddedEnd = Math.min(video.duration, end + AUDIO_CLIP_PAD_AFTER);
+    video.currentTime = paddedStart;
     await new Promise<void>((resolve) => {
       video.onseeked = () => resolve();
     });
@@ -99,7 +109,7 @@ async function extractVideoClip(
       if (e.data.size > 0) chunks.push(e.data);
     };
 
-    const durationMs = Math.max(200, (end - start) * 1000);
+    const durationMs = Math.max(200, (paddedEnd - paddedStart) * 1000);
     const done = new Promise<Blob>((resolve) => {
       recorder.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
     });
@@ -355,12 +365,15 @@ export function buildMultiFormatCards(
         break;
 
       case 'cloze_deletion':
-        // 完形填空: Front=sentence with blanks, Back=answers
+        // 完形填空: Front=sentence with blanks, Back=answers+translation
         if (fmt.clozeConfig) {
           const clozeText = generateClozeSentence(item.text, fmt.clozeConfig);
           const answers = generateClozeAnswers(item.text, fmt.clozeConfig);
           front = clozeText;
           back = answers.join('<br>');
+          if (baseTranslation) {
+            back += `<br><br><em>${baseTranslation}</em>`;
+          }
           tags.push('cloze-deletion');
         }
         break;
