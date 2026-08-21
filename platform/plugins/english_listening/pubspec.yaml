@@ -1,0 +1,36 @@
+name: english_listening
+description: "English Listening Plugin"
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  video_player: ^2.9.3
+  file_picker: ^8.0.0
+  go_router: ^14.8.1
+  drift: ^2.31.0
+  shared_preferences: ^2.3.0
+  shared_ui:
+    path: ../../shared/shared_ui
+  shared_auth:
+    path: ../../shared/shared_auth
+  shared_db:
+    path: ../../shared/shared_db
+  http: ^1.2.0
+
+flutter:
+  assets:
+    - assets/cefr_vocabulary.json
+    - assets/collocations.json
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  test: ^1.31.1

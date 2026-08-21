@@ -1,0 +1,34 @@
+{
+  "emeraldwalk.runonsave": {
+    "commands": [
+      {
+        "match": "platform/plugins/english_listening/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/plugins/english_listening && dart analyze 2>&1"
+      },
+      {
+        "match": "platform/plugins/english_listening/test/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/plugins/english_listening && flutter test 2>&1"
+      },
+      {
+        "match": "platform/plugins/flashcards/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/plugins/flashcards && dart analyze 2>&1"
+      },
+      {
+        "match": "platform/plugins/flashcards/test/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/plugins/flashcards && flutter test 2>&1"
+      },
+      {
+        "match": "platform/plugins/song_learning/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/plugins/song_learning && dart analyze 2>&1"
+      },
+      {
+        "match": "platform/shared/.*\\.dart$",
+        "cmd": "cd ${workspaceFolder}/platform/shell && dart analyze 2>&1"
+      },
+      {
+        "match": "platform/server/.*\\.py$",
+        "cmd": "cd ${workspaceFolder}/platform/server && ruff check ${file} 2>&1"
+      }
+    ]
+  }
+}

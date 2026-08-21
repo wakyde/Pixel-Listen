@@ -1,0 +1,11 @@
+export 'plugin.dart';
+export 'models/song_models.dart';
+export 'services/lyrics_parser.dart';
+export 'services/liaison_detector.dart';
+export 'services/scoring_service.dart';
+export 'services/song_service.dart';
+export 'screens/import_screen.dart';
+export 'screens/player_screen.dart';
+export 'screens/favorites_screen.dart';
+export 'screens/song_list_screen.dart';
+export 'providers/song_providers.dart';
